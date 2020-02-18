@@ -49,6 +49,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="WebAssemblyComponents.cs" />
     <Compile Include="WebAssemblyDotNET.cs" />
+    <Compile Include="WebAssemblyExecutionEngine.cs" />
     <Compile Include="WebAssemblySections.cs" />
   </ItemGroup>
   <ItemGroup>
