@@ -17,7 +17,8 @@ namespace WebAssemblyCS
 
                 file.start = new StartSection(1);
 
-                //return file.Run();
+                WebAssemblyInterpreter interpreter = new WebAssemblyInterpreter(file);
+                interpreter.Run();
             }
             catch (Exception ex)
             {
