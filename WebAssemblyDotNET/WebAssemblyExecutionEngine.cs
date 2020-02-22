@@ -49,6 +49,7 @@ namespace WebAssemblyDotNET
 
     public enum WASMStackObjectType
     {
+        Empty,
         ActivationObject,
         LabelObject,
         ValueObject
@@ -122,13 +123,13 @@ namespace WebAssemblyDotNET
     {
         public bool is_mutable;
         public WASMType type;
-        public InitExpr init_expr;
+        public WASMValueObject value;
 
-        public GlobalInstance(bool is_mutable, WASMType type, InitExpr init_expr)
+        public GlobalInstance(bool is_mutable, WASMType type, WASMValueObject value)
         {
             this.is_mutable = is_mutable;
             this.type = type;
-            this.init_expr = init_expr;
+            this.value = value;
         }
     }
 
@@ -181,6 +182,7 @@ namespace WebAssemblyDotNET
 
         public WASMStackObjectType Peek()
         {
+            if (stack_objects.Count == 0) return WASMStackObjectType.Empty;
             return stack_objects.Peek();
         }
         public WASMActivationObject PopActivation()
@@ -231,7 +233,9 @@ namespace WebAssemblyDotNET
             {
                 var global = file.global.globals[i];
 
-                ctx.globals[i] = new GlobalInstance(global.type.mutability, global.type.content_type, global.init);
+                ctx.globals[i] = new GlobalInstance(global.type.mutability, global.type.content_type, new WASMValueObject { type = WASMType.i32, value = WebAssemblyHelper.GetOffset(global.init) });
+
+                // TODO: execute expression and save that as a WASMValueObject
             }
         }
 
@@ -389,10 +393,22 @@ namespace WebAssemblyDotNET
             }
         }
 
+        // TODO: Execute should wrap around Execute_Code/Execute_Block
+        // That way we can call it for initexprs
+
+        private WASMValueObject GetValueOrFail(WebAssemblyExecutionContext ctx)
+        {
+            if (ctx.Peek() != WASMStackObjectType.ValueObject)
+            {
+                throw new Exception("Function stack corrupt.");
+            }
+            return ctx.PopValue();
+        }
+
         private WASMValueObject Execute(WebAssemblyExecutionContext ctx, uint func_id)
         {
-            var func = ctx.functions[func_id];
-            var parameters = new WASMValueObject[func.parameters.Length];
+            FunctionInstance func = ctx.functions[func_id];
+            WASMValueObject[] parameters = new WASMValueObject[func.parameters.Length];
 
             // Gather parameters from stack
             for (int i = 0; i < parameters.Length; i++)
@@ -403,19 +419,20 @@ namespace WebAssemblyDotNET
             }
 
             // Create our activation object and push on to the stack
-            var activation_object = new WASMActivationObject(ctx.functions[func_id], parameters);
+            WASMActivationObject activation_object = new WASMActivationObject(ctx.functions[func_id], parameters);
             ctx.Push(activation_object);
 
             // If we're external, run host code
             if (!func.is_in_module)
             {
-                func.host_code(parameters);
+                func.host_code(activation_object.parameters);
             }
             else
             {
                 bool continue_executing = true;
                 uint pc = 0;
 
+                // https://webassembly.github.io/spec/core/exec/instructions.html
                 while (continue_executing)
                 {
                     switch ((WASMOpcodes)func.code[pc])
@@ -427,17 +444,43 @@ namespace WebAssemblyDotNET
                         case WASMOpcodes.END:
                             continue_executing = false;
                             break;
+                        case WASMOpcodes.LOCAL_GET:
+                            {
+                                pc++;
+                                int local = LEB128.ReadInt32(func.code, ref pc);
+                                if (local < 0 || local > func.locals.Length) throw new Exception("Function corrupt.");
+
+                                ctx.Push(activation_object.locals[local]);
+                            }
+                            break;
+                        case WASMOpcodes.LOCAL_SET:
+                            {
+                                pc++;
+                                int local = LEB128.ReadInt32(func.code, ref pc);
+                                if (local < 0 || local > func.locals.Length) throw new Exception("Function corrupt.");
+
+                                if (ctx.Peek() != WASMStackObjectType.ValueObject)
+                                {
+                                    throw new Exception("Function stack corrupt.");
+                                }
+                                var val = ctx.PopValue();
+
+                                activation_object.locals[local] = val;
+                            }
+                            break;
                         case WASMOpcodes.I32_CONST:
                             // read var_int and push to stack
                             pc++;
                             ctx.Push(new WASMValueObject { type = WASMType.i32, value = LEB128.ReadInt32(func.code, ref pc) });
                             break;
                         case WASMOpcodes.CALL:
-                            // read var_int and call with stack
-                            pc++;
-                            uint new_func = LEB128.ReadUInt32(func.code, ref pc);
+                            {
+                                // read var_int and call with stack
+                                pc++;
+                                uint new_func = LEB128.ReadUInt32(func.code, ref pc);
 
-                            ctx.Push(Execute(ctx, new_func));
+                                ctx.Push(Execute(ctx, new_func));
+                            }
                             break;
                         case WASMOpcodes.DROP:
                             // drop last value on stack
@@ -446,6 +489,40 @@ namespace WebAssemblyDotNET
                                 throw new Exception("Function stack corrupt.");
                             }
                             ctx.PopValue();
+                            break;
+                        case WASMOpcodes.SELECT:
+                            {
+                                if (ctx.Peek() != WASMStackObjectType.ValueObject)
+                                {
+                                    throw new Exception("Function stack corrupt.");
+                                }
+                                var c = ctx.PopValue();
+                                if (c.type != WASMType.i32)
+                                {
+                                    throw new Exception("Function stack corrupt.");
+                                }
+
+                                if (ctx.Peek() != WASMStackObjectType.ValueObject) 
+                                {
+                                    throw new Exception("Function stack corrupt.");
+                                }
+                                var val2 = ctx.PopValue();
+
+                                if (ctx.Peek() != WASMStackObjectType.ValueObject)
+                                {
+                                    throw new Exception("Function stack corrupt.");
+                                }
+                                var val1 = ctx.PopValue();
+
+                                if(((int)c.value) != 0)
+                                {
+                                    ctx.Push(val1);
+                                }
+                                else
+                                {
+                                    ctx.Push(val2);
+                                }
+                            }
                             break;
                     }
                     pc++;

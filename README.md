@@ -8,14 +8,17 @@ A work in progress Web Assembly <--> .NET binding.
  * Partially validate wasm files
  * Create and write your own wasm files
  * Inspect and extract information from wasm files
+ * Run basic wasm files
 
 ## Todo
 
  * Load more than just Hello World files
  * Validate everything in the file
- * Execute WASM files
+ * ~~Execute WASM files~~
+ * Add more supported opcodes to execute
  * More tests
  * Disassemble wasm to wat
+ * Determine consistent API prefix (WASM or WebAssembly)
 
 ## Contributing
 
