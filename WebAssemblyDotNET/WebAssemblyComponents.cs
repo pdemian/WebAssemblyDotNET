@@ -455,7 +455,6 @@ namespace WebAssemblyDotNET
             }
         }
 
-        // TODO: Validate code
         // https://webassembly.github.io/spec/core/binary/modules.html#binary-func
         public class FunctionBody : WebAssemblyComponent
         {
@@ -592,7 +591,6 @@ namespace WebAssemblyDotNET
             }
         }
 
-        // TODO: Validate code
         // https://webassembly.github.io/spec/core/binary/instructions.html#binary-expr
         public class InitExpr : WebAssemblyComponent
         {

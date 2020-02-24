@@ -339,7 +339,7 @@ namespace WebAssemblyDotNET
         // https://webassembly.github.io/spec/core/binary/instructions.html#variable-instructions
         LOCAL_GET = 0x20,
         LOCAL_SET = 0x21,
-        LOCAL_TEE = 0x22, /* Not Implemented */
+        LOCAL_TEE = 0x22,
         GLOBAL_GET = 0x23, /* Not Implemented */
         GLOBAL_SET = 0x24, /* Not Implemented */
 

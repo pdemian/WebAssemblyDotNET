@@ -57,13 +57,18 @@ namespace WebAssemblyDotNET
 
     public class WASMActivationObject
     {
+        public uint pc;
         public FunctionInstance function;
         public WASMValueObject[] parameters;
         public WASMValueObject[] locals;
 
         public WASMActivationObject(FunctionInstance function, WASMValueObject[] parameters)
         {
-            if (!Enumerable.SequenceEqual(parameters.Select(x => x.type), function.parameters))
+            if(parameters == null)
+            {
+                if (function.parameters.Length != 0) throw new Exception("Corrupt Code");
+            }
+            else if (!Enumerable.SequenceEqual(parameters.Select(x => x.type), function.parameters))
             {
                 throw new Exception("Corrupt Code");
             }
@@ -76,6 +81,8 @@ namespace WebAssemblyDotNET
             {
                 locals[i] = new WASMValueObject { type = function.locals[i], value = null };
             }
+
+            pc = 0;
         }
     }
 
@@ -164,6 +171,122 @@ namespace WebAssemblyDotNET
         // For performance reasons, store their types rather than cast the top of the stack
         public readonly Stack<WASMStackObjectType> stack_objects = new Stack<WASMStackObjectType>();
 
+        public WebAssemblyExecutionContext(WASMFile file)
+        {
+            if (file.table != null) InitTable(file);
+            if (file.global != null) InitGlobal(file);
+            if (file.memory != null) InitMemory(file);
+            if (file.data != null) InitData(file);
+            InitType(file);
+            InitExport(file);
+            InitImport(file);
+            // TODO: InitElement(ctx);
+            InitFunctions(file);
+        }
+
+        private void InitTable(WASMFile file)
+        {
+            for (uint i = 0; i < (uint)file.table.entries.Length; i++)
+            {
+                var entry = file.table.entries[i];
+
+                tables[i] = new TableInstance(entry.element_type, entry.limits.initial, entry.limits.maximum);
+            }
+        }
+        private void InitGlobal(WASMFile file)
+        {
+            for (uint i = 0; i < (uint)file.global.globals.Length; i++)
+            {
+                var global = file.global.globals[i];
+
+                globals[i] = new GlobalInstance(global.type.mutability, global.type.content_type, null);
+            }
+        }
+        private void InitMemory(WASMFile file)
+        {
+            for (uint i = 0; i < (uint)file.memory.entries.Length; i++)
+            {
+                var limits = file.memory.entries[i].limits;
+
+                linear_memory[i] = new MemoryInstance(limits.initial, limits.maximum);
+            }
+        }
+        private void InitData(WASMFile file)
+        {
+            foreach (var entry in file.data.entries)
+            {
+                Array.Copy(entry.data, 0, linear_memory[entry.memory_index].memory, WebAssemblyHelper.GetOffset(entry.offset), entry.data.Length);
+            }
+        }
+        private void InitType(WASMFile file)
+        {
+            for (uint i = 0; i < (uint)file.type.entries.Length; i++)
+            {
+                var entry = file.type.entries[i];
+
+                functions[i] = new FunctionInstance
+                {
+                    return_type = entry.return_type,
+                    parameters = entry.param_types
+                };
+            }
+        }
+        private void InitExport(WASMFile file)
+        {
+            for (uint i = 0; i < (uint)file.export.entries.Length; i++)
+            {
+                var entry = file.export.entries[i];
+
+                switch (entry.kind)
+                {
+                    case WASMExternalKind.Function:
+                        var index = entry.index;
+                        functions[index].is_export = true;
+                        functions[index].name = entry.field_str;
+                        break;
+                }
+            }
+        }
+        private void InitImport(WASMFile file)
+        {
+            for (uint i = 0; i < (uint)file.import.entries.Length; i++)
+            {
+                var entry = file.import.entries[i];
+
+                switch (entry.kind)
+                {
+                    case WASMExternalKind.Function:
+                        var index = (uint)entry.type;
+                        functions[index].module = entry.module_str;
+                        functions[index].name = entry.field_str;
+                        break;
+                }
+            }
+        }
+        private void InitFunctions(WASMFile file)
+        {
+            if (file.function.types.Length != file.code.bodies.Length) throw new Exception("Invalid file");
+
+            for (uint i = 0; i < (uint)file.code.bodies.Length; i++)
+            {
+                var index = file.function.types[i];
+                var body = file.code.bodies[i];
+
+                functions[index].module = "this";
+                functions[index].is_in_module = true;
+                functions[index].code = body.code;
+
+                var locals_unwrapped = new List<WASMType>();
+
+                foreach (var local in body.locals)
+                {
+                    locals_unwrapped.AddRange(Enumerable.Repeat(local.type, (int)local.count));
+                }
+
+                functions[index].locals = locals_unwrapped.ToArray();
+            }
+        }
+
         public void Push(WASMActivationObject obj)
         {
             stack_objects.Push(WASMStackObjectType.ActivationObject);
@@ -178,6 +301,11 @@ namespace WebAssemblyDotNET
         {
             stack_objects.Push(WASMStackObjectType.ValueObject);
             values.Push(obj);
+        }
+
+        public WASMActivationObject GetCurrentFunction()
+        {
+            return callstack.Peek();
         }
 
         public WASMStackObjectType Peek()
@@ -217,118 +345,26 @@ namespace WebAssemblyDotNET
             this.file = file;
         }
 
-        private void InitTable(WebAssemblyExecutionContext ctx)
+        private void InitVariables(WebAssemblyExecutionContext ctx)
         {
-            for (uint i = 0; i < (uint)file.table.entries.Length; i++)
+            if(file.data != null)
             {
-                var entry = file.table.entries[i];
-
-                ctx.tables[i] = new TableInstance(entry.element_type, entry.limits.initial, entry.limits.maximum);
+                // TODO: Should data be initialized here?
+                // I don't think so as it's only supposed to be 
             }
-        }
 
-        private void InitGlobal(WebAssemblyExecutionContext ctx)
-        {
-            for (uint i = 0; i < (uint)file.global.globals.Length; i++)
+            // TODO: Element
+
+            if (file.global != null)
             {
-                var global = file.global.globals[i];
-
-                ctx.globals[i] = new GlobalInstance(global.type.mutability, global.type.content_type, new WASMValueObject { type = WASMType.i32, value = WebAssemblyHelper.GetOffset(global.init) });
-
-                // TODO: execute expression and save that as a WASMValueObject
-            }
-        }
-
-        private void InitMemory(WebAssemblyExecutionContext ctx)
-        {
-            for (uint i = 0; i < (uint)file.memory.entries.Length; i++)
-            {
-                var limits = file.memory.entries[i].limits;
-
-                ctx.linear_memory[i] = new MemoryInstance(limits.initial, limits.maximum);
-            }
-        }
-
-        private void InitData(WebAssemblyExecutionContext ctx)
-        {
-            foreach (var entry in file.data.entries)
-            {
-                Array.Copy(entry.data, 0, ctx.linear_memory[entry.memory_index].memory, WebAssemblyHelper.GetOffset(entry.offset), entry.data.Length);
-            }
-        }
-
-        private void InitType(WebAssemblyExecutionContext ctx)
-        {
-            for (uint i = 0; i < (uint)file.type.entries.Length; i++)
-            {
-                var entry = file.type.entries[i];
-
-                ctx.functions[i] = new FunctionInstance
+                for (uint i = 0; i < (uint)file.global.globals.Length; i++)
                 {
-                    return_type = entry.return_type,
-                    parameters = entry.param_types
-                };
-            }
-        }
+                    var global = file.global.globals[i];
 
-        private void InitExport(WebAssemblyExecutionContext ctx)
-        {
-            for (uint i = 0; i < (uint)file.export.entries.Length; i++)
-            {
-                var entry = file.export.entries[i];
-
-                switch (entry.kind)
-                {
-                    case WASMExternalKind.Function:
-                        var index = entry.index;
-                        ctx.functions[index].is_export = true;
-                        ctx.functions[index].name = entry.field_str;
-                        break;
+                    ctx.globals[i].value = Invoke_Anonymous(ctx, global.init.expr);
                 }
             }
         }
-
-        private void InitImport(WebAssemblyExecutionContext ctx)
-        {
-            for (uint i = 0; i < (uint)file.import.entries.Length; i++)
-            {
-                var entry = file.import.entries[i];
-
-                switch (entry.kind)
-                {
-                    case WASMExternalKind.Function:
-                        var index = (uint)entry.type;
-                        ctx.functions[index].module = entry.module_str;
-                        ctx.functions[index].name = entry.field_str;
-                        break;
-                }
-            }
-        }
-
-        private void InitFunctions(WebAssemblyExecutionContext ctx)
-        {
-            if (file.function.types.Length != file.code.bodies.Length) throw new Exception("Invalid file");
-
-            for (uint i = 0; i < (uint)file.code.bodies.Length; i++)
-            {
-                var index = file.function.types[i];
-                var body = file.code.bodies[i];
-
-                ctx.functions[index].module = string.Empty;
-                ctx.functions[index].is_in_module = true;
-                ctx.functions[index].code = body.code;
-
-                var locals_unwrapped = new List<WASMType>();
-
-                foreach (var local in body.locals)
-                {
-                    locals_unwrapped.AddRange(Enumerable.Repeat(local.type, (int)local.count));
-                }
-
-                ctx.functions[index].locals = locals_unwrapped.ToArray();
-            }
-        }
-
         private void ResolveExternalFunctions(WebAssemblyExecutionContext ctx)
         {
             foreach (var func in ctx.functions)
@@ -361,24 +397,16 @@ namespace WebAssemblyDotNET
             if (file.code == null) throw new Exception("No code to execute!");
             if (file.start == null) throw new Exception("No start function!");
 
-            WebAssemblyExecutionContext ctx = new WebAssemblyExecutionContext();
+            WebAssemblyExecutionContext ctx = new WebAssemblyExecutionContext(file);
 
-            if (file.table != null) InitTable(ctx);
-            if (file.global != null) InitGlobal(ctx);
-            if (file.memory != null) InitMemory(ctx);
-            if (file.data != null) InitData(ctx);
-            InitType(ctx);
-            InitExport(ctx);
-            InitImport(ctx);
-            // TODO: InitElement(ctx);
-            InitFunctions(ctx);
             ResolveExternalFunctions(ctx);
+            InitVariables(ctx);
 
             uint start_func = file.start.index;
             if (!ctx.functions.ContainsKey(start_func)) throw new Exception("Corrupt file.");
 
             // Execute starting from the start_func
-            var result = Execute(ctx, start_func);
+            var result = Invoke(ctx, start_func);
 
             // I'm not sure what valid result types are for main
             // What about void? Is that valid or is it simply 0?
@@ -393,19 +421,16 @@ namespace WebAssemblyDotNET
             }
         }
 
-        // TODO: Execute should wrap around Execute_Code/Execute_Block
-        // That way we can call it for initexprs
-
         private WASMValueObject GetValueOrFail(WebAssemblyExecutionContext ctx)
         {
             if (ctx.Peek() != WASMStackObjectType.ValueObject)
             {
-                throw new Exception("Function stack corrupt.");
+                Trap(ctx, "Function stack corrupt.");
             }
             return ctx.PopValue();
         }
 
-        private WASMValueObject Execute(WebAssemblyExecutionContext ctx, uint func_id)
+        private WASMValueObject Invoke(WebAssemblyExecutionContext ctx, uint func_id)
         {
             FunctionInstance func = ctx.functions[func_id];
             WASMValueObject[] parameters = new WASMValueObject[func.parameters.Length];
@@ -413,9 +438,7 @@ namespace WebAssemblyDotNET
             // Gather parameters from stack
             for (int i = 0; i < parameters.Length; i++)
             {
-                if (ctx.Peek() != WASMStackObjectType.ValueObject)
-                    throw new Exception("Function stack corrupt.");
-                parameters[i] = ctx.PopValue();
+                parameters[i] = GetValueOrFail(ctx);
             }
 
             // Create our activation object and push on to the stack
@@ -429,121 +452,154 @@ namespace WebAssemblyDotNET
             }
             else
             {
-                bool continue_executing = true;
-                uint pc = 0;
-
-                // https://webassembly.github.io/spec/core/exec/instructions.html
-                while (continue_executing)
-                {
-                    switch ((WASMOpcodes)func.code[pc])
-                    {
-                        case WASMOpcodes.UNREACHABLE:
-                            throw new Exception("Unreachable reached!");
-                        case WASMOpcodes.NOP:
-                            break;
-                        case WASMOpcodes.END:
-                            continue_executing = false;
-                            break;
-                        case WASMOpcodes.LOCAL_GET:
-                            {
-                                pc++;
-                                int local = LEB128.ReadInt32(func.code, ref pc);
-                                if (local < 0 || local > func.locals.Length) throw new Exception("Function corrupt.");
-
-                                ctx.Push(activation_object.locals[local]);
-                            }
-                            break;
-                        case WASMOpcodes.LOCAL_SET:
-                            {
-                                pc++;
-                                int local = LEB128.ReadInt32(func.code, ref pc);
-                                if (local < 0 || local > func.locals.Length) throw new Exception("Function corrupt.");
-
-                                if (ctx.Peek() != WASMStackObjectType.ValueObject)
-                                {
-                                    throw new Exception("Function stack corrupt.");
-                                }
-                                var val = ctx.PopValue();
-
-                                activation_object.locals[local] = val;
-                            }
-                            break;
-                        case WASMOpcodes.I32_CONST:
-                            // read var_int and push to stack
-                            pc++;
-                            ctx.Push(new WASMValueObject { type = WASMType.i32, value = LEB128.ReadInt32(func.code, ref pc) });
-                            break;
-                        case WASMOpcodes.CALL:
-                            {
-                                // read var_int and call with stack
-                                pc++;
-                                uint new_func = LEB128.ReadUInt32(func.code, ref pc);
-
-                                ctx.Push(Execute(ctx, new_func));
-                            }
-                            break;
-                        case WASMOpcodes.DROP:
-                            // drop last value on stack
-                            if (ctx.Peek() != WASMStackObjectType.ValueObject)
-                            {
-                                throw new Exception("Function stack corrupt.");
-                            }
-                            ctx.PopValue();
-                            break;
-                        case WASMOpcodes.SELECT:
-                            {
-                                if (ctx.Peek() != WASMStackObjectType.ValueObject)
-                                {
-                                    throw new Exception("Function stack corrupt.");
-                                }
-                                var c = ctx.PopValue();
-                                if (c.type != WASMType.i32)
-                                {
-                                    throw new Exception("Function stack corrupt.");
-                                }
-
-                                if (ctx.Peek() != WASMStackObjectType.ValueObject) 
-                                {
-                                    throw new Exception("Function stack corrupt.");
-                                }
-                                var val2 = ctx.PopValue();
-
-                                if (ctx.Peek() != WASMStackObjectType.ValueObject)
-                                {
-                                    throw new Exception("Function stack corrupt.");
-                                }
-                                var val1 = ctx.PopValue();
-
-                                if(((int)c.value) != 0)
-                                {
-                                    ctx.Push(val1);
-                                }
-                                else
-                                {
-                                    ctx.Push(val2);
-                                }
-                            }
-                            break;
-                    }
-                    pc++;
-                }
+                Execute(ctx);             
             }
 
-            if (ctx.Peek() != WASMStackObjectType.ValueObject)
+            WASMValueObject result = GetValueOrFail(ctx);
+
+            if(result.type != func.return_type)
             {
-                throw new Exception("Function stack corrupt.");
+                Trap(ctx, "Function corrupt.");
             }
-
-            var result = ctx.PopValue();
 
             // Remember to pop our own activation instance off the record!
             // Double check as well that it is in fact us
             if (ctx.Peek() != WASMStackObjectType.ActivationObject || activation_object != ctx.PopActivation())
             {
-                throw new Exception("Function stack corrupt.");
+                Trap(ctx, "Function stack corrupt.");
             }
 
             return result;
+        }
+
+        private WASMValueObject Invoke_Anonymous(WebAssemblyExecutionContext ctx, byte[] code)
+        {
+            FunctionInstance func = new FunctionInstance
+            {
+                code = code,
+                is_in_module = true,
+                locals = new WASMType[0],
+                module = "this",
+                name = "Anonymous@" + code.GetHashCode(),
+                parameters = new WASMType[0]
+            };
+
+            // Create our activation object and push on to the stack
+            WASMActivationObject activation_object = new WASMActivationObject(func, null);
+            ctx.Push(activation_object);
+
+            Execute(ctx);
+            
+            WASMValueObject result = GetValueOrFail(ctx);
+
+            // Remember to pop our own activation instance off the record!
+            // Double check as well that it is in fact us
+            if (ctx.Peek() != WASMStackObjectType.ActivationObject || activation_object != ctx.PopActivation())
+            {
+                Trap(ctx, "Function stack corrupt.");
+            }
+
+            return result;
+        }
+
+        private void Trap(WebAssemblyExecutionContext ctx, string error)
+        {
+            WASMActivationObject activation_object = ctx.GetCurrentFunction();
+            FunctionInstance func = activation_object.function;
+
+            throw new Exception($"Trap occured at {func.module}.{func.name}@{activation_object.pc} with message: {error}");
+        }
+
+        // TODO: Can now transform Execute from a recursive function into an iterative function 
+        private void Execute(WebAssemblyExecutionContext ctx)
+        {
+            WASMActivationObject activation_object = ctx.GetCurrentFunction();
+            FunctionInstance func = activation_object.function;
+
+            bool continue_executing = true;
+
+            // https://webassembly.github.io/spec/core/exec/instructions.html
+            while (continue_executing)
+            {
+                switch ((WASMOpcodes)func.code[activation_object.pc])
+                {
+                    case WASMOpcodes.UNREACHABLE:
+                        Trap(ctx, "Unreachable reached!");
+                        break;
+                    case WASMOpcodes.NOP:
+                        break;
+                    case WASMOpcodes.END:
+                        continue_executing = false;
+                        break;
+                    case WASMOpcodes.LOCAL_GET:
+                        {
+                            activation_object.pc++;
+                            int local = LEB128.ReadInt32(func.code, ref activation_object.pc);
+                            if (local < 0 || local > func.locals.Length) Trap(ctx, "Function corrupt.");
+
+                            ctx.Push(activation_object.locals[local]);
+                        }
+                        break;
+                    case WASMOpcodes.LOCAL_SET:
+                        {
+                            activation_object.pc++;
+                            uint local = LEB128.ReadUInt32(func.code, ref activation_object.pc);
+                            if (local > func.locals.Length) Trap(ctx, "Function corrupt.");
+
+                            WASMValueObject val = GetValueOrFail(ctx);
+
+                            activation_object.locals[local] = val;
+                        }
+                        break;
+                    case WASMOpcodes.LOCAL_TEE:
+                        {
+                            WASMValueObject val = GetValueOrFail(ctx);
+                            ctx.Push(val);
+                            ctx.Push(val);
+                        }
+                        goto case WASMOpcodes.LOCAL_SET;
+                    case WASMOpcodes.I32_CONST:
+                        // read var_int and push to stack
+                        activation_object.pc++;
+                        ctx.Push(new WASMValueObject { type = WASMType.i32, value = LEB128.ReadInt32(func.code, ref activation_object.pc) });
+                        break;
+                    case WASMOpcodes.CALL:
+                        {
+                            // read var_int and call with stack
+                            activation_object.pc++;
+                            uint new_func = LEB128.ReadUInt32(func.code, ref activation_object.pc);
+
+                            ctx.Push(Invoke(ctx, new_func));
+                        }
+                        break;
+                    case WASMOpcodes.DROP:
+                        // drop last value on stack
+                        GetValueOrFail(ctx);
+                        break;
+                    case WASMOpcodes.SELECT:
+                        {
+                            WASMValueObject c = GetValueOrFail(ctx);
+                            if (c.type != WASMType.i32)
+                            {
+                                Trap(ctx, "Function stack corrupt.");
+                            }
+
+                            WASMValueObject val2 = GetValueOrFail(ctx);
+                            WASMValueObject val1 = GetValueOrFail(ctx);
+
+                            if (((int)c.value) != 0)
+                            {
+                                ctx.Push(val1);
+                            }
+                            else
+                            {
+                                ctx.Push(val2);
+                            }
+                        }
+                        break;
+                }
+                activation_object.pc++;
+            }
         }
     }
 }
