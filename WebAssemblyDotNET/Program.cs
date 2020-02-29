@@ -13,7 +13,7 @@ namespace WebAssemblyCS
             WASMFile file = new WASMFile();
             try
             {   
-                file.Parse("helloworld.wasm");
+                file.Parse("loadandstore.wasm", false);
 
                 file.start = new StartSection(1);
 

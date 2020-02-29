@@ -1,0 +1,20 @@
+(module
+ (table 0 anyfunc)
+ (memory $0 1)
+ (data (i32.const 12) "\00\00\00\00")
+ (export "memory" (memory $0))
+ (export "f" (func $f))
+ (export "main" (func $main))
+ (func $f (; 0 ;) (result i32)
+  (i32.load offset=12
+   (i32.const 0)
+  )
+ )
+ (func $main (; 1 ;) (result i32)
+  (i32.store offset=12
+   (i32.const 0)
+   (i32.const 1)
+  )
+  (call $f)
+ )
+)

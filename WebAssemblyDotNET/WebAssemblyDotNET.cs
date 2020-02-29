@@ -52,6 +52,29 @@ namespace WebAssemblyDotNET
 
             return value;
         }
+
+        internal static WASMValueObject GetInitExpr(InitExpr init)
+        {
+            if (init.expr.Length < 1) throw new Exception("Unexpected init expression.");
+
+            uint pc = 1;
+
+            switch (init.expr[0])
+            {
+                case (byte)WASMOpcodes.I32_CONST:
+                    return new WASMValueObject(LEB128.ReadInt32(init.expr, ref pc));
+                case (byte)WASMOpcodes.I64_CONST:
+                    return new WASMValueObject(LEB128.ReadInt64(init.expr, ref pc));
+                case (byte)WASMOpcodes.F32_CONST:
+                    return new WASMValueObject(BitConverter.ToSingle(init.expr, (int)pc));
+                case (byte)WASMOpcodes.F64_CONST:
+                    return new WASMValueObject(BitConverter.ToDouble(init.expr, (int)pc));
+                case (byte)WASMOpcodes.GLOBAL_GET:
+                    throw new NotImplementedException("Todo. Needs to be immutable as well");
+                default:
+                    throw new Exception("Invalid init expression. Expected only simple constant load instruction.");
+            }
+        }
     }
 
     public static class LEB128
@@ -193,6 +216,8 @@ namespace WebAssemblyDotNET
             int result = 0;
             byte next = 0;
 
+            pc++;
+
             for (uint count = 1; count < 6; count++)
             {
                 next = code[pc];
@@ -217,12 +242,64 @@ namespace WebAssemblyDotNET
             int shift = 0;
             uint result = 0;
 
+            pc++;
+
             // Guaranteed to be 5 bytes or less. Doing this might make the compiler unroll the loop
             for (uint count = 1; count < 6; count++)
             {
                 byte next = code[pc];
                 result |= (next & 0b01111111u) << shift;
                 if ((next & 0b10000000u) == 0)
+                {
+                    break;
+                }
+                pc++;
+                shift += 7;
+            }
+
+            return result;
+        }
+
+        public static long ReadInt64(byte[] code, ref uint pc)
+        {
+            int shift = 0;
+            long result = 0;
+            byte next = 0;
+
+            pc++;
+
+            for (uint count = 1; count < 11; count++)
+            {
+                next = code[pc];
+                result |= (next & 0b01111111L) << shift;
+                shift += 7;
+
+                if ((next & 0b10000000U) == 0)
+                {
+                    break;
+                }
+
+                pc++;
+            }
+
+            if ((shift < 64) && (next & 0b01000000U) != 0)
+                result |= (~0L << shift);
+
+            return result;
+        }
+        public static ulong ReadUInt64(byte[] code, ref uint pc)
+        {
+            int shift = 0;
+            ulong result = 0;
+
+            pc++;
+
+            // Guaranteed to be 10 bytes or less. Doing this might make the compiler unroll the loop
+            for (uint count = 1; count < 11; count++)
+            {
+                byte next = code[pc];
+                result |= (next & 0b01111111UL) << shift;
+                if ((next & 0b10000000U) == 0)
                 {
                     break;
                 }
@@ -344,11 +421,12 @@ namespace WebAssemblyDotNET
         GLOBAL_SET = 0x24, /* Not Implemented */
 
         // https://webassembly.github.io/spec/core/binary/instructions.html#memory-instructions
-        /* Not implemented */
         I32_LOAD = 0x28,
         I64_LOAD = 0x29,
         F32_LOAD = 0x2A,
         F64_LOAD = 0x2B,
+
+        /* Not implemented */
         I32_LOAD8_S = 0x2C,
         I32_LOAD8_U = 0x2D,
         I32_LOAD16_S = 0x2E,
@@ -359,10 +437,13 @@ namespace WebAssemblyDotNET
         I64_LOAD16_U = 0x33,
         I64_LOAD32_S = 0x34,
         I64_LOAD32_U = 0x35,
+
         I32_STORE = 0x36,
         I64_STORE = 0x37,
         F32_STORE = 0x38,
         F64_STORE = 0x39,
+
+        /* Not implemented */
         I32_STORE8 = 0x3A,
         I32_STORE16 = 0x3B,
         I64_STORE8 = 0x3C,
@@ -502,7 +583,6 @@ namespace WebAssemblyDotNET
         I64_REINTERPRET_F64 = 0xBD,
         F32_REINTERPRET_I32 = 0xBE,
         F64_REINTERPRET_I64 = 0xBF,
-
     }
 
     // https://webassembly.github.io/spec/core/binary/modules.html#binary-module

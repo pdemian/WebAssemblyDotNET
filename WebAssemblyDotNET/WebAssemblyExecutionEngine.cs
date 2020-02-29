@@ -15,6 +15,14 @@ namespace WebAssemblyDotNET
         public long page_size;
         public byte[] memory;
 
+        public long actual_size
+        {
+            get
+            {
+                return current * page_size;
+            }
+        }
+
         public WASMMemoryManager(long current, long maximum, long page_size = 64 * 1024)
         {
             this.current = current;
@@ -79,7 +87,23 @@ namespace WebAssemblyDotNET
 
             for (uint i = 0; i < (locals?.Length ?? 0); i++)
             {
-                locals[i] = new WASMValueObject { type = function.locals[i], value = null };
+                switch(function.locals[i])
+                {
+                    case WASMType.i32:
+                        locals[i] = new WASMValueObject(default(int));
+                        break;
+                    case WASMType.i64:
+                        locals[i] = new WASMValueObject(default(long));
+                        break;
+                    case WASMType.f32:
+                        locals[i] = new WASMValueObject(default(float));
+                        break;
+                    case WASMType.f64:
+                        locals[i] = new WASMValueObject(default(double));
+                        break;
+                    default:
+                        throw new Exception("Corrupt Code");
+                }
             }
 
             pc = 0;
@@ -97,6 +121,30 @@ namespace WebAssemblyDotNET
     {
         public WASMType type;
         public object value;
+
+        public WASMValueObject(int value)
+        {
+            type = WASMType.i32;
+            this.value = value;
+        }
+
+        public WASMValueObject(long value)
+        {
+            type = WASMType.i64;
+            this.value = value;
+        }
+
+        public WASMValueObject(float value)
+        {
+            type = WASMType.f32;
+            this.value = value;
+        }
+
+        public WASMValueObject(double value)
+        {
+            type = WASMType.f64;
+            this.value = value;
+        }
     }
 
     public class FunctionInstance
@@ -117,6 +165,7 @@ namespace WebAssemblyDotNET
         private WASMMemoryManager mem;
 
         public byte[] memory => mem.memory;
+        public long size => mem.actual_size;
 
         public int GrowMemory(uint num_pages) => mem.grow_memory(num_pages);
 
@@ -146,6 +195,7 @@ namespace WebAssemblyDotNET
         private WASMMemoryManager mem;
 
         public byte[] memory => mem.memory;
+        public long size => mem.actual_size;
 
         public int GrowMemory(uint num_pages) => mem.grow_memory(num_pages);
 
@@ -177,11 +227,11 @@ namespace WebAssemblyDotNET
             if (file.global != null) InitGlobal(file);
             if (file.memory != null) InitMemory(file);
             if (file.data != null) InitData(file);
-            InitType(file);
-            InitExport(file);
-            InitImport(file);
-            // TODO: InitElement(ctx);
+            if (file.import != null) InitImport(file);
             InitFunctions(file);
+            if (file.export != null) InitExport(file);
+            
+            // TODO: InitElement(ctx);
         }
 
         private void InitTable(WASMFile file)
@@ -218,19 +268,6 @@ namespace WebAssemblyDotNET
                 Array.Copy(entry.data, 0, linear_memory[entry.memory_index].memory, WebAssemblyHelper.GetOffset(entry.offset), entry.data.Length);
             }
         }
-        private void InitType(WASMFile file)
-        {
-            for (uint i = 0; i < (uint)file.type.entries.Length; i++)
-            {
-                var entry = file.type.entries[i];
-
-                functions[i] = new FunctionInstance
-                {
-                    return_type = entry.return_type,
-                    parameters = entry.param_types
-                };
-            }
-        }
         private void InitExport(WASMFile file)
         {
             for (uint i = 0; i < (uint)file.export.entries.Length; i++)
@@ -249,6 +286,13 @@ namespace WebAssemblyDotNET
         }
         private void InitImport(WASMFile file)
         {
+            Dictionary<uint, FuncType> type_info = new Dictionary<uint, FuncType>();
+
+            for (uint i = 0; i < (uint)file.type.entries.Length; i++)
+            {
+                type_info[i] = file.type.entries[i];
+            }
+
             for (uint i = 0; i < (uint)file.import.entries.Length; i++)
             {
                 var entry = file.import.entries[i];
@@ -256,34 +300,56 @@ namespace WebAssemblyDotNET
                 switch (entry.kind)
                 {
                     case WASMExternalKind.Function:
-                        var index = (uint)entry.type;
-                        functions[index].module = entry.module_str;
-                        functions[index].name = entry.field_str;
+                        uint index = (uint)entry.type;
+
+                        functions[i] = new FunctionInstance
+                        {
+                            module = entry.module_str,
+                            name = entry.field_str,
+                            parameters = type_info[index].param_types,
+                            return_type = type_info[index].return_type
+                        };
                         break;
                 }
             }
         }
         private void InitFunctions(WASMFile file)
         {
+            Dictionary<uint, FuncType> type_info = new Dictionary<uint, FuncType>();
+
+            for (uint i = 0; i < (uint)file.type.entries.Length; i++)
+            {
+                type_info[i] = file.type.entries[i];
+            }
+
             if (file.function.types.Length != file.code.bodies.Length) throw new Exception("Invalid file");
+
+            uint import_count = (uint)functions.Count;
 
             for (uint i = 0; i < (uint)file.code.bodies.Length; i++)
             {
-                var index = file.function.types[i];
-                var body = file.code.bodies[i];
+                uint index = file.function.types[i];
+                FunctionBody body = file.code.bodies[i];
 
-                functions[index].module = "this";
-                functions[index].is_in_module = true;
-                functions[index].code = body.code;
+                uint func_indx = i + import_count;
 
-                var locals_unwrapped = new List<WASMType>();
+                functions[func_indx] = new FunctionInstance
+                {
+                    module = "this",
+                    is_in_module = true,
+                    code = body.code,
+                    parameters = type_info[index].param_types,
+                    return_type = type_info[index].return_type,
+                };
+
+                List<WASMType> locals_unwrapped = new List<WASMType>();
 
                 foreach (var local in body.locals)
                 {
                     locals_unwrapped.AddRange(Enumerable.Repeat(local.type, (int)local.count));
                 }
 
-                functions[index].locals = locals_unwrapped.ToArray();
+                functions[i].locals = locals_unwrapped.ToArray();
             }
         }
 
@@ -336,6 +402,19 @@ namespace WebAssemblyDotNET
         public static unsafe extern int puts(byte* str);
     }
 
+    public class WebAssemblyTrap : Exception
+    {
+        public WebAssemblyTrap(string message) : base(message)
+        {
+
+        }
+
+        public WebAssemblyTrap(string message, Exception innerException) : base(message, innerException)
+        {
+
+        }
+    }
+
     public class WebAssemblyInterpreter
     {
         public readonly WASMFile file;
@@ -350,7 +429,7 @@ namespace WebAssemblyDotNET
             if(file.data != null)
             {
                 // TODO: Should data be initialized here?
-                // I don't think so as it's only supposed to be 
+                // I don't think so as it's only supposed to be an i32.const
             }
 
             // TODO: Element
@@ -361,10 +440,11 @@ namespace WebAssemblyDotNET
                 {
                     var global = file.global.globals[i];
 
-                    ctx.globals[i].value = Invoke_Anonymous(ctx, global.init.expr);
+                    ctx.globals[i].value = WebAssemblyHelper.GetInitExpr(global.init);
                 }
             }
         }
+
         private void ResolveExternalFunctions(WebAssemblyExecutionContext ctx)
         {
             foreach (var func in ctx.functions)
@@ -380,7 +460,7 @@ namespace WebAssemblyDotNET
                                     fixed (byte* arr = ctx.linear_memory[0].memory)
                                         WASMEnvironmentCalls.puts(arr + (int)args[0].value);
                                 }
-                                ctx.Push(new WASMValueObject { type = WASMType.i32, value = 0 });
+                                ctx.Push(new WASMValueObject(0));
                             };
                             break;
                         default:
@@ -430,6 +510,29 @@ namespace WebAssemblyDotNET
             return ctx.PopValue();
         }
 
+        private WASMValueObject GetValueOfTypeOrFail(WebAssemblyExecutionContext ctx, WASMType expected_type)
+        {
+            WASMValueObject obj = GetValueOrFail(ctx);
+
+            if(obj.type != expected_type)
+            {
+                Trap(ctx, "Function stack corrupt.");
+            }
+
+            return obj;
+        }
+
+        private (int align, uint offset) GetMemArgsOrFail(byte[] code, ref uint pc)
+        {
+            // align is in bytes
+            // it tells us how this value is aligned
+            // in our implementation, we can disregard alignment
+            int align = 1 << (int)LEB128.ReadUInt32(code, ref pc);
+            uint offset = LEB128.ReadUInt32(code, ref pc);
+
+            return (align, offset);
+        }
+
         private WASMValueObject Invoke(WebAssemblyExecutionContext ctx, uint func_id)
         {
             FunctionInstance func = ctx.functions[func_id];
@@ -472,133 +575,237 @@ namespace WebAssemblyDotNET
             return result;
         }
 
-        private WASMValueObject Invoke_Anonymous(WebAssemblyExecutionContext ctx, byte[] code)
-        {
-            FunctionInstance func = new FunctionInstance
-            {
-                code = code,
-                is_in_module = true,
-                locals = new WASMType[0],
-                module = "this",
-                name = "Anonymous@" + code.GetHashCode(),
-                parameters = new WASMType[0]
-            };
-
-            // Create our activation object and push on to the stack
-            WASMActivationObject activation_object = new WASMActivationObject(func, null);
-            ctx.Push(activation_object);
-
-            Execute(ctx);
-            
-            WASMValueObject result = GetValueOrFail(ctx);
-
-            // Remember to pop our own activation instance off the record!
-            // Double check as well that it is in fact us
-            if (ctx.Peek() != WASMStackObjectType.ActivationObject || activation_object != ctx.PopActivation())
-            {
-                Trap(ctx, "Function stack corrupt.");
-            }
-
-            return result;
-        }
-
         private void Trap(WebAssemblyExecutionContext ctx, string error)
         {
             WASMActivationObject activation_object = ctx.GetCurrentFunction();
             FunctionInstance func = activation_object.function;
 
-            throw new Exception($"Trap occured at {func.module}.{func.name}@{activation_object.pc} with message: {error}");
+            throw new WebAssemblyTrap($"Trap occured at {func.module}.{func.name}@{activation_object.pc} with message: {error}");
         }
 
         // TODO: Can now transform Execute from a recursive function into an iterative function 
+        // Each time a new "frame" is added, we just update activation_object and func
+        // ctx records the current pc so when we go back
+        // Simply need to inline the Invoke method into Execute
         private void Execute(WebAssemblyExecutionContext ctx)
         {
-            WASMActivationObject activation_object = ctx.GetCurrentFunction();
-            FunctionInstance func = activation_object.function;
-
-            bool continue_executing = true;
-
-            // https://webassembly.github.io/spec/core/exec/instructions.html
-            while (continue_executing)
+            try
             {
-                switch ((WASMOpcodes)func.code[activation_object.pc])
+                WASMActivationObject activation_object = ctx.GetCurrentFunction();
+                FunctionInstance func = activation_object.function;
+                byte[] code = func.code;
+
+                bool continue_executing = true;
+
+                // https://webassembly.github.io/spec/core/exec/instructions.html
+                while (continue_executing)
                 {
-                    case WASMOpcodes.UNREACHABLE:
-                        Trap(ctx, "Unreachable reached!");
-                        break;
-                    case WASMOpcodes.NOP:
-                        break;
-                    case WASMOpcodes.END:
-                        continue_executing = false;
-                        break;
-                    case WASMOpcodes.LOCAL_GET:
-                        {
-                            activation_object.pc++;
-                            int local = LEB128.ReadInt32(func.code, ref activation_object.pc);
-                            if (local < 0 || local > func.locals.Length) Trap(ctx, "Function corrupt.");
-
-                            ctx.Push(activation_object.locals[local]);
-                        }
-                        break;
-                    case WASMOpcodes.LOCAL_SET:
-                        {
-                            activation_object.pc++;
-                            uint local = LEB128.ReadUInt32(func.code, ref activation_object.pc);
-                            if (local > func.locals.Length) Trap(ctx, "Function corrupt.");
-
-                            WASMValueObject val = GetValueOrFail(ctx);
-
-                            activation_object.locals[local] = val;
-                        }
-                        break;
-                    case WASMOpcodes.LOCAL_TEE:
-                        {
-                            WASMValueObject val = GetValueOrFail(ctx);
-                            ctx.Push(val);
-                            ctx.Push(val);
-                        }
-                        goto case WASMOpcodes.LOCAL_SET;
-                    case WASMOpcodes.I32_CONST:
-                        // read var_int and push to stack
-                        activation_object.pc++;
-                        ctx.Push(new WASMValueObject { type = WASMType.i32, value = LEB128.ReadInt32(func.code, ref activation_object.pc) });
-                        break;
-                    case WASMOpcodes.CALL:
-                        {
-                            // read var_int and call with stack
-                            activation_object.pc++;
-                            uint new_func = LEB128.ReadUInt32(func.code, ref activation_object.pc);
-
-                            ctx.Push(Invoke(ctx, new_func));
-                        }
-                        break;
-                    case WASMOpcodes.DROP:
-                        // drop last value on stack
-                        GetValueOrFail(ctx);
-                        break;
-                    case WASMOpcodes.SELECT:
-                        {
-                            WASMValueObject c = GetValueOrFail(ctx);
-                            if (c.type != WASMType.i32)
+                    switch ((WASMOpcodes)code[activation_object.pc])
+                    {
+                        case WASMOpcodes.UNREACHABLE:
+                            Trap(ctx, "Unreachable reached!");
+                            break;
+                        case WASMOpcodes.NOP:
+                            break;
+                        case WASMOpcodes.END:
+                            continue_executing = false;
+                            break;
+                        case WASMOpcodes.LOCAL_GET:
                             {
-                                Trap(ctx, "Function stack corrupt.");
-                            }
+                                int local = LEB128.ReadInt32(code, ref activation_object.pc);
+                                if (local < 0 || local > func.locals.Length) Trap(ctx, "Function corrupt.");
 
-                            WASMValueObject val2 = GetValueOrFail(ctx);
-                            WASMValueObject val1 = GetValueOrFail(ctx);
+                                ctx.Push(activation_object.locals[local]);
+                            }
+                            break;
+                        case WASMOpcodes.LOCAL_SET:
+                            {
+                                uint local = LEB128.ReadUInt32(code, ref activation_object.pc);
+                                if (local > func.locals.Length) Trap(ctx, "Function corrupt.");
 
-                            if (((int)c.value) != 0)
-                            {
-                                ctx.Push(val1);
+                                WASMValueObject val = GetValueOrFail(ctx);
+
+                                activation_object.locals[local] = val;
                             }
-                            else
+                            break;
+                        case WASMOpcodes.LOCAL_TEE:
                             {
-                                ctx.Push(val2);
+                                WASMValueObject val = GetValueOrFail(ctx);
+                                ctx.Push(val);
+                                ctx.Push(val);
                             }
-                        }
-                        break;
+                            goto case WASMOpcodes.LOCAL_SET;
+                        case WASMOpcodes.I32_CONST:
+                            ctx.Push(new WASMValueObject(LEB128.ReadInt32(code, ref activation_object.pc)));
+                            break;
+                        case WASMOpcodes.I64_CONST:
+                            ctx.Push(new WASMValueObject(LEB128.ReadInt64(code, ref activation_object.pc)));
+                            break;
+                        case WASMOpcodes.F32_CONST:
+                            ctx.Push(new WASMValueObject(BitConverter.ToSingle(code, (int)activation_object.pc+1)));
+                            activation_object.pc += 4;
+                            break;
+                        case WASMOpcodes.F64_CONST:
+                            ctx.Push(new WASMValueObject(BitConverter.ToDouble(code, (int)activation_object.pc+1)));
+                            activation_object.pc += 7;
+                            break;
+                        case WASMOpcodes.I32_LOAD:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(int);
+
+                                if ((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                ctx.Push(new WASMValueObject(BitConverter.ToInt32(ctx.linear_memory[0].memory, (int)ea)));
+                            }
+                            break;
+                        case WASMOpcodes.I64_LOAD:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(long);
+
+                                if ((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                ctx.Push(new WASMValueObject(BitConverter.ToInt64(ctx.linear_memory[0].memory, (int)ea)));
+                            }
+                            break;
+                        case WASMOpcodes.F32_LOAD:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(float);
+
+                                if ((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                ctx.Push(new WASMValueObject(BitConverter.ToSingle(ctx.linear_memory[0].memory, (int)ea)));
+                            }
+                            break;
+                        case WASMOpcodes.F64_LOAD:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(double);
+
+                                if ((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                ctx.Push(new WASMValueObject(BitConverter.ToDouble(ctx.linear_memory[0].memory, (int)ea)));
+                            }
+                            break;
+                        case WASMOpcodes.I32_STORE:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(int);
+
+                                if((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                Array.Copy(BitConverter.GetBytes((int)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                            }
+                            break;
+                        case WASMOpcodes.I64_STORE:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i64);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(long);
+
+                                if ((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                Array.Copy(BitConverter.GetBytes((long)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                            }
+                            break;
+                        case WASMOpcodes.F32_STORE:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.f32);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(float);
+
+                                if ((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                Array.Copy(BitConverter.GetBytes((float)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                            }
+                            break;
+                        case WASMOpcodes.F64_STORE:
+                            {
+                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
+                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.f64);
+                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                long ea = (int)i.value + offset;
+                                uint N = sizeof(double);
+
+                                if ((ea + N) > ctx.linear_memory[0].size)
+                                {
+                                    Trap(ctx, "Illegal memory access");
+                                }
+
+                                Array.Copy(BitConverter.GetBytes((double)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                            }
+                            break;
+                        case WASMOpcodes.CALL:
+                            {
+                                uint new_func = LEB128.ReadUInt32(code, ref activation_object.pc);
+
+                                ctx.Push(Invoke(ctx, new_func));
+                            }
+                            break;
+                        case WASMOpcodes.DROP:
+                            GetValueOrFail(ctx);
+                            break;
+                        case WASMOpcodes.SELECT:
+                            {
+                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                WASMValueObject val2 = GetValueOrFail(ctx);
+                                WASMValueObject val1 = GetValueOrFail(ctx);
+
+                                ctx.Push((int)c.value != 0 ? val1 : val2);
+                            }
+                            break;
+                        default:
+                            Trap(ctx, $"Unknown Opcode {code[activation_object.pc]}.");
+                            break;
+                    }
+                    activation_object.pc++;
                 }
-                activation_object.pc++;
+            }
+            catch(WebAssemblyTrap)
+            {
+                throw;
+            }
+            catch(Exception ex)
+            {
+                Trap(ctx, "Unexpected Error: " + ex.Message);
             }
         }
     }
