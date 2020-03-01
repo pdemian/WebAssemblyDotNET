@@ -78,9 +78,9 @@ namespace WebAssemblyDotNET
             switch (init.expr[0])
             {
                 case (byte)WASMOpcodes.I32_CONST:
-                    return new WASMValueObject(LEB128.ReadInt32(init.expr, ref pc));
+                    return new WASMValueObject(LEB128.ReadUInt32(init.expr, ref pc));
                 case (byte)WASMOpcodes.I64_CONST:
-                    return new WASMValueObject(LEB128.ReadInt64(init.expr, ref pc));
+                    return new WASMValueObject(LEB128.ReadUInt64(init.expr, ref pc));
                 case (byte)WASMOpcodes.F32_CONST:
                     return new WASMValueObject(BitConverter.ToSingle(init.expr, (int)pc));
                 case (byte)WASMOpcodes.F64_CONST:
