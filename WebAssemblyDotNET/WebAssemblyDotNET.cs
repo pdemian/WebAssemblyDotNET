@@ -2,11 +2,27 @@
 using System.IO;
 using WebAssemblyDotNET.Sections;
 using WebAssemblyDotNET.Components;
+using System.Runtime.InteropServices;
 
 namespace WebAssemblyDotNET
 {
     internal static class WebAssemblyHelper
     {
+        [StructLayout(LayoutKind.Explicit)]
+        internal struct ReinterpretHelper
+        {
+            [FieldOffset(0)] public sbyte i8;
+            [FieldOffset(0)] public short i16;
+            [FieldOffset(0)] public int i32;
+            [FieldOffset(0)] public long i64;
+            [FieldOffset(0)] public byte ui8;
+            [FieldOffset(0)] public ushort ui16;
+            [FieldOffset(0)] public uint ui32;
+            [FieldOffset(0)] public ulong ui64;
+            [FieldOffset(0)] public float f32;
+            [FieldOffset(0)] public double f64;
+        }
+
         internal static bool IsValueType(WASMType type)
         {
             switch (type)
@@ -406,7 +422,7 @@ namespace WebAssemblyDotNET
         BR_TABLE = 0x0E, /* Not Implemented */
         RETURN = 0x0F, /* Not Implemented */
         END = 0x0B, /* special case */
-        CALL = 0x10,
+        CALL = 0x10, /* special case */
         CALL_INDIRECT = 0x11, /* Not Implemented */
 
         // https://webassembly.github.io/spec/core/binary/instructions.html#parametric-instructions
@@ -425,8 +441,6 @@ namespace WebAssemblyDotNET
         I64_LOAD = 0x29,
         F32_LOAD = 0x2A,
         F64_LOAD = 0x2B,
-
-        /* Not implemented */
         I32_LOAD8_S = 0x2C,
         I32_LOAD8_U = 0x2D,
         I32_LOAD16_S = 0x2E,
@@ -437,19 +451,15 @@ namespace WebAssemblyDotNET
         I64_LOAD16_U = 0x33,
         I64_LOAD32_S = 0x34,
         I64_LOAD32_U = 0x35,
-
         I32_STORE = 0x36,
         I64_STORE = 0x37,
         F32_STORE = 0x38,
         F64_STORE = 0x39,
-
-        /* Not implemented */
         I32_STORE8 = 0x3A,
         I32_STORE16 = 0x3B,
         I64_STORE8 = 0x3C,
         I64_STORE16 = 0x3D,
         I64_STORE32 = 0x3E,
-
         MEMORY_SIZE = 0x3F, /* special case */
         MEMORY_GROW = 0x40, /* special case */
 

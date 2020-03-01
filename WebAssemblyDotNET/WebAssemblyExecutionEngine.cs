@@ -31,11 +31,11 @@ namespace WebAssemblyDotNET
             memory = new byte[current * page_size];
         }
 
-        public int grow_memory(uint num_pages)
+        public bool grow_memory(uint num_pages)
         {
             long ideal_size = current + num_pages * page_size;
 
-            if (ideal_size > maximum) return -1;
+            if (ideal_size > maximum) return false;
 
             byte[] new_mem = null;
             try
@@ -44,14 +44,14 @@ namespace WebAssemblyDotNET
             }
             catch (Exception)
             {
-                throw;
+                return false;
             }
 
             Array.Copy(memory, new_mem, ideal_size);
 
             memory = new_mem;
 
-            return 0;
+            return true;
         }
     }
 
@@ -166,8 +166,9 @@ namespace WebAssemblyDotNET
 
         public byte[] memory => mem.memory;
         public long size => mem.actual_size;
+        public long pages => mem.current;
 
-        public int GrowMemory(uint num_pages) => mem.grow_memory(num_pages);
+        public bool GrowMemory(uint num_pages) => mem.grow_memory(num_pages);
 
         public MemoryInstance(uint initial, uint? maximum)
         {
@@ -197,7 +198,7 @@ namespace WebAssemblyDotNET
         public byte[] memory => mem.memory;
         public long size => mem.actual_size;
 
-        public int GrowMemory(uint num_pages) => mem.grow_memory(num_pages);
+        public bool GrowMemory(uint num_pages) => mem.grow_memory(num_pages);
 
         public TableInstance(WASMType type, uint initial, uint? maximum)
         {
@@ -522,7 +523,7 @@ namespace WebAssemblyDotNET
             return obj;
         }
 
-        private (int align, uint offset) GetMemArgsOrFail(byte[] code, ref uint pc)
+        private (byte[] memory, int location) LoadOrFail(WebAssemblyExecutionContext ctx, byte[] code, uint size, ref uint pc)
         {
             // align is in bytes
             // it tells us how this value is aligned
@@ -530,7 +531,37 @@ namespace WebAssemblyDotNET
             int align = 1 << (int)LEB128.ReadUInt32(code, ref pc);
             uint offset = LEB128.ReadUInt32(code, ref pc);
 
-            return (align, offset);
+            WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+            long ea = (int)i.value + offset;
+            uint N = size/8;
+
+            if ((ea + N) > ctx.linear_memory[0].size)
+            {
+                Trap(ctx, "Illegal memory access");
+            }
+
+            return (ctx.linear_memory[0].memory, (int)ea);
+        }
+
+        private (WASMValueObject value, byte[] memory, int location) StoreOrFail(WebAssemblyExecutionContext ctx, byte[] code, uint size, WASMType type, ref uint pc)
+        {
+            // align is in bytes
+            // it tells us how this value is aligned
+            // in our implementation, we can disregard alignment
+            int align = 1 << (int)LEB128.ReadUInt32(code, ref pc);
+            uint offset = LEB128.ReadUInt32(code, ref pc);
+
+            WASMValueObject c = GetValueOfTypeOrFail(ctx, type);
+            WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+            long ea = (int)i.value + offset;
+            uint N = size / 8;
+
+            if ((ea + N) > ctx.linear_memory[0].size)
+            {
+                Trap(ctx, "Illegal memory access");
+            }
+
+            return (c, ctx.linear_memory[0].memory, (int)ea);
         }
 
         private WASMValueObject Invoke(WebAssemblyExecutionContext ctx, uint func_id)
@@ -595,6 +626,8 @@ namespace WebAssemblyDotNET
                 FunctionInstance func = activation_object.function;
                 byte[] code = func.code;
 
+                //WebAssemblyHelper.ReinterpretHelper reinterpret_helper = new WebAssemblyHelper.ReinterpretHelper();
+
                 bool continue_executing = true;
 
                 // https://webassembly.github.io/spec/core/exec/instructions.html
@@ -651,126 +684,180 @@ namespace WebAssemblyDotNET
                             break;
                         case WASMOpcodes.I32_LOAD:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(int);
+                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
 
-                                if ((ea + N) > ctx.linear_memory[0].size)
-                                {
-                                    Trap(ctx, "Illegal memory access");
-                                }
-
-                                ctx.Push(new WASMValueObject(BitConverter.ToInt32(ctx.linear_memory[0].memory, (int)ea)));
+                                ctx.Push(new WASMValueObject(BitConverter.ToInt32(memory, location)));
                             }
                             break;
                         case WASMOpcodes.I64_LOAD:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(long);
+                                var (memory, location) = LoadOrFail(ctx, code, 64, ref activation_object.pc);
 
-                                if ((ea + N) > ctx.linear_memory[0].size)
-                                {
-                                    Trap(ctx, "Illegal memory access");
-                                }
-
-                                ctx.Push(new WASMValueObject(BitConverter.ToInt64(ctx.linear_memory[0].memory, (int)ea)));
+                                ctx.Push(new WASMValueObject(BitConverter.ToInt64(memory, location)));
                             }
                             break;
                         case WASMOpcodes.F32_LOAD:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(float);
+                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
 
-                                if ((ea + N) > ctx.linear_memory[0].size)
-                                {
-                                    Trap(ctx, "Illegal memory access");
-                                }
-
-                                ctx.Push(new WASMValueObject(BitConverter.ToSingle(ctx.linear_memory[0].memory, (int)ea)));
+                                ctx.Push(new WASMValueObject(BitConverter.ToSingle(memory, location)));
                             }
                             break;
                         case WASMOpcodes.F64_LOAD:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(double);
+                                var (memory, location) = LoadOrFail(ctx, code, 64, ref activation_object.pc);
 
-                                if ((ea + N) > ctx.linear_memory[0].size)
-                                {
-                                    Trap(ctx, "Illegal memory access");
-                                }
+                                ctx.Push(new WASMValueObject(BitConverter.ToDouble(memory, location)));
+                            }
+                            break;
+                        case WASMOpcodes.I32_LOAD8_S:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject(BitConverter.ToDouble(ctx.linear_memory[0].memory, (int)ea)));
+                                ctx.Push(new WASMValueObject((int)(sbyte)memory[location]));
+                            }
+                            break;
+                        case WASMOpcodes.I32_LOAD8_U:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject((int)memory[location]));
+                            }
+                            break;
+                        case WASMOpcodes.I32_LOAD16_S:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject(BitConverter.ToInt16(memory, (int)activation_object.pc)));
+                            }
+                            break;
+                        case WASMOpcodes.I32_LOAD16_U:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject(BitConverter.ToUInt16(memory, (int)activation_object.pc)));
+                            }
+                            break;
+                        case WASMOpcodes.I64_LOAD8_S:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject((long)(sbyte)memory[location]));
+                            }
+                            break;
+                        case WASMOpcodes.I64_LOAD8_U:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject((long)memory[location]));
+                            }
+                            break;
+                        case WASMOpcodes.I64_LOAD16_S:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject((long)BitConverter.ToInt16(memory, (int)activation_object.pc)));
+                            }
+                            break;
+                        case WASMOpcodes.I64_LOAD16_U:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject((long)BitConverter.ToUInt16(memory, (int)activation_object.pc)));
+                            }
+                            break;
+                        case WASMOpcodes.I64_LOAD32_S:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject((long)BitConverter.ToInt32(memory, (int)activation_object.pc)));
+                            }
+                            break;
+                        case WASMOpcodes.I64_LOAD32_U:
+                            {
+                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
+
+                                ctx.Push(new WASMValueObject((long)BitConverter.ToUInt32(memory, (int)activation_object.pc)));
                             }
                             break;
                         case WASMOpcodes.I32_STORE:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(int);
+                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.i32, ref activation_object.pc);
 
-                                if((ea + N) > ctx.linear_memory[0].size)
-                                {
-                                    Trap(ctx, "Illegal memory access");
-                                }
-
-                                Array.Copy(BitConverter.GetBytes((int)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                                Array.Copy(BitConverter.GetBytes((int)value.value), 0, memory, location, 32/8);
                             }
                             break;
                         case WASMOpcodes.I64_STORE:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i64);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(long);
+                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
 
-                                if ((ea + N) > ctx.linear_memory[0].size)
-                                {
-                                    Trap(ctx, "Illegal memory access");
-                                }
-
-                                Array.Copy(BitConverter.GetBytes((long)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                                Array.Copy(BitConverter.GetBytes((long)value.value), 0, memory, location, 64/8);
                             }
                             break;
                         case WASMOpcodes.F32_STORE:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.f32);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(float);
+                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.f32, ref activation_object.pc);
 
-                                if ((ea + N) > ctx.linear_memory[0].size)
-                                {
-                                    Trap(ctx, "Illegal memory access");
-                                }
-
-                                Array.Copy(BitConverter.GetBytes((float)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                                Array.Copy(BitConverter.GetBytes((float)value.value), 0, memory, location, 32/8);
                             }
                             break;
                         case WASMOpcodes.F64_STORE:
                             {
-                                var (_, offset) = GetMemArgsOrFail(code, ref activation_object.pc);
-                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.f64);
-                                WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                long ea = (int)i.value + offset;
-                                uint N = sizeof(double);
+                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.f64, ref activation_object.pc);
 
-                                if ((ea + N) > ctx.linear_memory[0].size)
+                                Array.Copy(BitConverter.GetBytes((double)value.value), 0, memory, location, 64/8);
+                            }
+                            break;
+                        case WASMOpcodes.I32_STORE8:
+                            {
+                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.i32, ref activation_object.pc);
+
+                                memory[location] = (byte)(int)value.value;
+                            }
+                            break;
+                        case WASMOpcodes.I32_STORE16:
+                            {
+                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.i32, ref activation_object.pc);
+
+                                Array.Copy(BitConverter.GetBytes((short)(int)value.value), 0, memory, location, 16/8);
+                            }
+                            break;
+                        case WASMOpcodes.I64_STORE8:
+                            {
+                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
+
+                                memory[location] = (byte)(long)value.value;
+                            }
+                            break;
+                        case WASMOpcodes.I64_STORE16:
+                            {
+                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
+
+                                Array.Copy(BitConverter.GetBytes((short)(long)value.value), 0, memory, location, 16/8);
+                            }
+                            break;
+                        case WASMOpcodes.I64_STORE32:
+                            {
+                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
+
+                                Array.Copy(BitConverter.GetBytes((int)(long)value.value), 0, memory, location, 32/8);
+                            }
+                            break;
+                        case WASMOpcodes.MEMORY_SIZE:
+                            ctx.Push(new WASMValueObject((int)ctx.linear_memory[0].pages));
+                            break;
+                        case WASMOpcodes.MEMORY_GROW:
+                            {
+                                WASMValueObject n = GetValueOfTypeOrFail(ctx, WASMType.i32);
+
+                                if(ctx.linear_memory[0].GrowMemory((uint)n.value))
                                 {
-                                    Trap(ctx, "Illegal memory access");
+                                    ctx.Push(n);
                                 }
-
-                                Array.Copy(BitConverter.GetBytes((double)c.value), 0, ctx.linear_memory[0].memory, ea, N);
+                                else
+                                {
+                                    ctx.Push(new WASMValueObject(-1));
+                                }
                             }
                             break;
                         case WASMOpcodes.CALL:
