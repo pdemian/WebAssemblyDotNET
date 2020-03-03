@@ -112,9 +112,14 @@ namespace WebAssemblyDotNET
 
     public class WASMLabelObject
     {
-        // Labels carry an arity...for some reason
-        // uint n;
+        public uint arity;
         public uint branch_target;
+
+        public WASMLabelObject(uint arity, uint branch_target)
+        {
+            this.arity = arity;
+            this.branch_target = branch_target;
+        }
     }
 
     public class WASMValueObject 
@@ -461,7 +466,7 @@ namespace WebAssemblyDotNET
                 {
                     var global = file.global.globals[i];
 
-                    ctx.globals[i].value = WebAssemblyHelper.GetInitExpr(global.init);
+                    ctx.globals[i].value = WebAssemblyHelper.GetInitExpr(global.init, ctx.globals.Values.ToArray());
                 }
             }
         }
@@ -584,6 +589,68 @@ namespace WebAssemblyDotNET
             return (c, ctx.linear_memory[0].memory, (int)ea);
         }
 
+        private void Enter(WebAssemblyExecutionContext ctx, WASMLabelObject obj)
+        {
+            ctx.Push(obj);
+        }
+
+        private void Exit(WebAssemblyExecutionContext ctx)
+        {
+            // exit, no label required
+        }
+
+        private void Exit(WebAssemblyExecutionContext ctx, uint l)
+        {
+            if(ctx.labels.Count() < l + 1)
+            {
+                Trap(ctx, "Function corrupt");
+            }
+
+            // Stack appears to consider ElementAt from the front of the list rather than the back
+            // So paradoxically, it actually counts up (0th element = latest, 1st = second, etc)
+            WASMLabelObject label = ctx.labels.ElementAt((int)l);
+
+            uint n = label.arity;
+
+            /*
+                Pop the values val^n from the stack.
+                Repeat l+1 times:
+                    While the top of the stack is a value, do:
+                        Pop the value from the stack.
+                    Assert: due to validation, the top of the stack now is a label.
+                    Pop the label from the stack.
+                Push the values val^n to the stack.
+             */
+
+            Stack<WASMValueObject> values = new Stack<WASMValueObject>();
+            for(uint i = 0; i < n; i++)
+            {
+                values.Push(GetValueOrFail(ctx));
+            }
+
+            for(uint i = 0; i < l+1; i++)
+            {
+                while(ctx.Peek() == WASMStackObjectType.ValueObject)
+                {
+                    ctx.PopValue();
+                }
+
+                if(ctx.Peek() != WASMStackObjectType.LabelObject)
+                {
+                    Trap(ctx, "Corrupt function");
+                }
+
+                ctx.PopLabel();
+            }
+
+            for(uint i = 0; i < n; i++)
+            {
+                ctx.Push(values.Pop());
+            }
+
+            ctx.GetCurrentFunction().pc = label.branch_target;
+        }
+
         private WASMValueObject Invoke(WebAssemblyExecutionContext ctx, uint func_id)
         {
             FunctionInstance func = ctx.functions[func_id];
@@ -662,6 +729,31 @@ namespace WebAssemblyDotNET
                             break;
                         case WASMOpcodes.END:
                             continue_executing = false;
+                            break;
+                        case WASMOpcodes.LOOP:
+                            {
+                                // ignore result for now
+                                activation_object.pc++;
+                                var result = (WASMType)code[activation_object.pc];
+
+                                Enter(ctx, new WASMLabelObject(0, activation_object.pc-2));
+                            }
+                            break;
+                        case WASMOpcodes.BR:
+                            { 
+                                uint l = LEB128.ReadUInt32(code, ref activation_object.pc);
+
+                                Exit(ctx, l);
+                            }
+                            break;
+                        case WASMOpcodes.BR_IF:
+                            {
+                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                if(c.AsI32() != 0)
+                                {
+                                    goto case WASMOpcodes.BR;
+                                }
+                            }
                             break;
                         case WASMOpcodes.LOCAL_GET:
                             {

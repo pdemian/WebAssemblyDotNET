@@ -1,0 +1,12 @@
+(module
+ (type $FUNCSIG$ii (func (param i32) (result i32)))
+ (table 0 anyfunc)
+ (memory $0 1)
+ (export "memory" (memory $0))
+ (export "main" (func $main))
+ (func $main (; 1 ;) (result i32)
+  (loop $label$0 (result i32)
+   (br $label$0)
+  )
+ )
+)

@@ -69,27 +69,45 @@ namespace WebAssemblyDotNET
             return value;
         }
 
-        internal static WASMValueObject GetInitExpr(InitExpr init)
+        internal static WASMValueObject GetInitExpr(InitExpr init, GlobalInstance[] initialized_globals)
         {
-            if (init.expr.Length < 1) throw new Exception("Unexpected init expression.");
+            if (init.expr.Length < 3) throw new Exception("Unexpected init expression.");
 
-            uint pc = 1;
+            uint pc = 0;
+
+            WASMValueObject ret = null;
 
             switch (init.expr[0])
             {
                 case (byte)WASMOpcodes.I32_CONST:
-                    return new WASMValueObject(LEB128.ReadUInt32(init.expr, ref pc));
+                    ret = new WASMValueObject(LEB128.ReadUInt32(init.expr, ref pc));
+                    break;
                 case (byte)WASMOpcodes.I64_CONST:
-                    return new WASMValueObject(LEB128.ReadUInt64(init.expr, ref pc));
+                    ret = new WASMValueObject(LEB128.ReadUInt64(init.expr, ref pc));
+                    break;
                 case (byte)WASMOpcodes.F32_CONST:
-                    return new WASMValueObject(BitConverter.ToSingle(init.expr, (int)pc));
+                    ret = new WASMValueObject(BitConverter.ToSingle(init.expr, (int)pc));
+                    break;
                 case (byte)WASMOpcodes.F64_CONST:
-                    return new WASMValueObject(BitConverter.ToDouble(init.expr, (int)pc));
+                    ret = new WASMValueObject(BitConverter.ToDouble(init.expr, (int)pc));
+                    break;
                 case (byte)WASMOpcodes.GLOBAL_GET:
-                    throw new NotImplementedException("Todo. Needs to be immutable as well");
+                    GlobalInstance gi = initialized_globals[LEB128.ReadUInt32(init.expr, ref pc)];
+                    if (!gi.is_mutable) throw new Exception("Unexpected init expression.");
+                    ret = gi.value;
+                    break;
                 default:
-                    throw new Exception("Invalid init expression. Expected only simple constant load instruction.");
+                    throw new Exception("Invalid init expression. Expected only simple constant load instruction or global get.");
             }
+
+            pc++;
+
+            if(init.expr[pc] != (byte)WASMOpcodes.END || init.expr.Length > pc)
+            {
+                throw new Exception("Invalid init expression.");
+            }
+
+            return ret;
         }
     }
 
@@ -414,15 +432,15 @@ namespace WebAssemblyDotNET
         UNREACHABLE = 0x00,
         NOP = 0x01,
         BLOCK = 0x02, /* Not Implemented */
-        LOOP = 0x03, /* Not Implemented */
+        LOOP = 0x03,
         IF = 0x04, /* Not Implemented */
-        ELSE = 0x05, /* special case */
-        BR = 0x0C, /* Not Implemented */
-        BR_IF = 0x0D, /* Not Implemented */
+        ELSE = 0x05, /* Not Implemented */
+        BR = 0x0C,
+        BR_IF = 0x0D,
         BR_TABLE = 0x0E, /* Not Implemented */
         RETURN = 0x0F, /* Not Implemented */
-        END = 0x0B, /* special case */
-        CALL = 0x10, /* special case */
+        END = 0x0B, /* Not Implemented */
+        CALL = 0x10,
         CALL_INDIRECT = 0x11, /* Not Implemented */
 
         // https://webassembly.github.io/spec/core/binary/instructions.html#parametric-instructions
@@ -460,8 +478,8 @@ namespace WebAssemblyDotNET
         I64_STORE8 = 0x3C,
         I64_STORE16 = 0x3D,
         I64_STORE32 = 0x3E,
-        MEMORY_SIZE = 0x3F, /* special case */
-        MEMORY_GROW = 0x40, /* special case */
+        MEMORY_SIZE = 0x3F,
+        MEMORY_GROW = 0x40,
 
         // https://webassembly.github.io/spec/core/binary/instructions.html#numeric-instructions
         I32_CONST = 0x41,

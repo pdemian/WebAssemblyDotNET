@@ -13,9 +13,9 @@ namespace WebAssemblyCS
             WASMFile file = new WASMFile();
             try
             {   
-                file.Parse("loadandstore.wasm", false);
+                file.Parse("tests/loop.wasm", false);
 
-                file.start = new StartSection(1);
+                file.start = new StartSection(0);
 
                 WebAssemblyInterpreter interpreter = new WebAssemblyInterpreter(file);
                 return interpreter.Run();
