@@ -6,196 +6,173 @@ using WebAssemblyDotNET.Sections;
 using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
+using NLog;
 
 namespace WebAssemblyCS
 {
-    class Program
+    class Options
     {
-        class Options
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
+        public readonly bool Help;
+        public readonly bool Verbose;
+        public readonly bool Debug;
+        public readonly bool Strict;
+        public readonly bool Execute;
+        public readonly uint? Run;
+        public readonly List<string> Filenames = new List<string>();
+
+        private readonly bool any_errors;
+
+        public Options(string[] args)
         {
-            public readonly bool Help;
-            public readonly bool Version;
-            public readonly bool Debug;
-            public readonly bool Strict;
-            public readonly bool Execute;
-            public readonly uint? Run;
-            public readonly List<string> Filenames = new List<string>();
+            if (args.Length == 0) Help = true;
 
-            public readonly List<string> Warnings = new List<string>();
-            public readonly List<string> Errors = new List<string>();
-
-            public Options(string[] args)
+            for (int i = 0; i < args.Length; i++)
             {
-                if (args.Length == 0) Help = true;
+                string current_arg = args[i].ToUpper();
 
-                for(int i = 0; i < args.Length; i++)
+                if (current_arg.StartsWith("-") || current_arg.StartsWith("/"))
                 {
-                    string current_arg = args[i].ToUpper();
-
-                    if(current_arg.StartsWith("-") || current_arg.StartsWith("/"))
+                    current_arg = current_arg.Substring(1);
+                    switch (current_arg)
                     {
-                        current_arg = current_arg.Substring(1);
-                        switch (current_arg)
-                        {
-                            case "H":
-                            case "?":
-                                if (Help) Warnings.Add("Duplicate help argument.");
-                                Help = true;
-                                break;
-                            case "V":
-                                if (Version) Warnings.Add("Duplicate version argument.");
-                                Version = true;
-                                break;
-                            case "D":
-                                if (Debug) Warnings.Add("Duplicate debug argument.");
-                                Debug = true;
-                                break;
-                            case "S":
-                                if (Strict) Warnings.Add("Duplicate strict argument.");
-                                Strict = true;
-                                break;
-                            case "E":
-                                if (Execute) Warnings.Add("Duplicate execute argument.");
-                                Execute = true;
-                                break;
-                            case "R":
-                                if (Run != null) Warnings.Add("Duplicate run argument.");
-                                try
-                                {
-                                    Run = uint.Parse(args[++i]);
-                                }
-                                catch(Exception)
-                                {
-                                    Errors.Add("Invalid run argument.");
-                                }
-                                break;
-                            default:
-                                Errors.Add($"Unknown argument {args[i]}.");
-                                break;
-                        }
-                    }
-                    else if(current_arg.StartsWith("--"))
-                    {
-                        current_arg = current_arg.Substring(2);
-                        switch (current_arg)
-                        {
-                            case "HELP":
-                                if (Help) Warnings.Add("Duplicate help argument.");
-                                Help = true;
-                                break;
-                            case "VERSION":
-                                if (Version) Warnings.Add("Duplicate version argument.");
-                                Version = true;
-                                break;
-                            case "DEBUG":
-                                if (Debug) Warnings.Add("Duplicate debug argument.");
-                                Debug = true;
-                                break;
-                            case "STRICT":
-                                if (Strict) Warnings.Add("Duplicate strict argument.");
-                                Strict = true;
-                                break;
-                            case "EXECUTE":
-                                if (Execute) Warnings.Add("Duplicate execute argument.");
-                                Execute = true;
-                                break;
-                            case "RUN":
-                                if (Run != null) Warnings.Add("Duplicate run argument.");
-                                try
-                                {
-                                    Run = uint.Parse(args[++i]);
-                                }
-                                catch (Exception)
-                                {
-                                    Errors.Add("Invalid run argument.");
-                                }
-                                break;
-                            default:
-                                Errors.Add($"Unknown argument {args[i]}.");
-                                break;
-                        }
-                    }
-                    else
-                    {
-                        if (!File.Exists(args[i]))
-                        {
-                            Errors.Add($"File {args[i]} does not exist or cannot be accessed.");
-                        }
-                        else
-                        {
-                            Filenames.Add(args[i]);
-                        }
+                        case "H":
+                        case "?":
+                            if (Help) logger.Warn("Duplicate help argument.");
+                            Help = true;
+                            break;
+                        case "V":
+                            if (Verbose) logger.Warn("Duplicate verbose argument.");
+                            Verbose = true;
+                            break;
+                        case "D":
+                            if (Debug) logger.Warn("Duplicate debug argument.");
+                            Debug = true;
+                            break;
+                        case "S":
+                            if (Strict) logger.Warn("Duplicate strict argument.");
+                            Strict = true;
+                            break;
+                        case "E":
+                            if (Execute) logger.Warn("Duplicate execute argument.");
+                            Execute = true;
+                            break;
+                        case "R":
+                            if (Run != null) logger.Warn("Duplicate run argument.");
+                            try
+                            {
+                                Run = uint.Parse(args[++i]);
+                            }
+                            catch (Exception)
+                            {
+                                logger.Error("Invalid run argument.");
+                                any_errors = true;
+                            }
+                            break;
+                        default:
+                            logger.Error($"Unknown argument {args[i]}.");
+                            any_errors = true;
+                            break;
                     }
                 }
-
-                if (Run != null && Execute) Warnings.Add("Run will overwrite the start function specified by execute.");
-
-                if (Filenames.Count == 0) Errors.Add("No files to process.");
-
-                if (Errors.Count > 0) Help = true;
-            }
-
-            public string GetHelp()
-            {
-                StringBuilder sb = new StringBuilder();
-
-                if (Errors.Count > 0)
+                else if (current_arg.StartsWith("--"))
                 {
-                    foreach (var err in Errors)
+                    current_arg = current_arg.Substring(2);
+                    switch (current_arg)
                     {
-                        sb.AppendLine(err);
+                        case "HELP":
+                            if (Help) logger.Warn("Duplicate help argument.");
+                            Help = true;
+                            break;
+                        case "VERBOSE":
+                            if (Verbose) logger.Warn("Duplicate Verbose argument.");
+                            Verbose = true;
+                            break;
+                        case "DEBUG":
+                            if (Debug) logger.Warn("Duplicate debug argument.");
+                            Debug = true;
+                            break;
+                        case "STRICT":
+                            if (Strict) logger.Warn("Duplicate strict argument.");
+                            Strict = true;
+                            break;
+                        case "EXECUTE":
+                            if (Execute) logger.Warn("Duplicate execute argument.");
+                            Execute = true;
+                            break;
+                        case "RUN":
+                            if (Run != null) logger.Warn("Duplicate run argument.");
+                            try
+                            {
+                                Run = uint.Parse(args[++i]);
+                            }
+                            catch (Exception)
+                            {
+                                logger.Error("Invalid run argument.");
+                                any_errors = true;
+                            }
+                            break;
+                        default:
+                            logger.Error($"Unknown argument {args[i]}.");
+                            any_errors = true;
+                            break;
                     }
-
-                    sb.AppendLine($"Try '{GetName()} --help' for more information.");
                 }
                 else
                 {
-                    sb.AppendLine(GetNameAndVersion());
-                    sb.AppendLine("\tParses, Validates, and Runs WebAssembly files.");
-                    sb.AppendLine("Usage: ");
-                    sb.AppendLine($"\t{GetName()} [options] file1.wasm [, file2.wasm, ...]");
-                    sb.AppendLine("Options: ");
-                    sb.AppendLine("\t-h/--help\t\tPrints this help message.");
-                    sb.AppendLine("\t-v/--version\t\tPrints product version.");
-                    sb.AppendLine("\t-d/--debug\t\tPrints debug information.");
-                    sb.AppendLine("\t-s/--strict\t\tStrict parsing and execution.");
-                    sb.AppendLine("\t-e/--execute\t\tExecute the WASM file based on the start section.");
-                    sb.AppendLine("\t-r/--run [id]\t\tExecutes the WASM function [id].");
-                }
-
-                return sb.ToString();
-            }
-
-            public string GetWarnings()
-            {
-                StringBuilder sb = new StringBuilder();
-
-                if (Warnings.Count > 0)
-                {
-                    foreach (var err in Warnings)
+                    if (!File.Exists(args[i]))
                     {
-                        sb.AppendLine(err);
+                        logger.Error($"File {args[i]} does not exist or cannot be accessed.");
+                        any_errors = true;
+                    }
+                    else
+                    {
+                        Filenames.Add(args[i]);
                     }
                 }
-
-                return sb.ToString();
             }
 
-            public string GetNameAndVersion()
-            {
-                return $"{GetName()} {GetVersion()}";
-            }
+            if (Run != null && Execute) logger.Warn("Run will overwrite the start function specified by execute.");
 
-            private string GetName()
-            {
-                return Process.GetCurrentProcess().ProcessName;
-            }
+            if (Verbose && Debug) logger.Warn("The debug flag overrides the verbose flag.");
 
-            private string GetVersion()
+            if (Filenames.Count == 0)
             {
-                return FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location).ProductVersion;
+                logger.Error("No files to process.");
+                any_errors = true;
             }
         }
+
+        public string GetHelp()
+        {
+            StringBuilder sb = new StringBuilder();
+
+            if (any_errors && !Help)
+            {
+                sb.AppendLine($"Try '{Process.GetCurrentProcess().ProcessName} --help' for more information.");
+            }
+            else
+            {
+                sb.AppendLine("\tParses, Validates, and Runs WebAssembly files.");
+                sb.AppendLine("Usage: ");
+                sb.AppendLine($"\t{Process.GetCurrentProcess().ProcessName} [options] file1.wasm [, file2.wasm, ...]");
+                sb.AppendLine("Options: ");
+                sb.AppendLine("\t-h/--help\t\tPrints this help message.");
+                sb.AppendLine("\t-v/--version\t\tPrints product version.");
+                sb.AppendLine("\t-d/--debug\t\tPrints debug information.");
+                sb.AppendLine("\t-s/--strict\t\tStrict parsing and execution.");
+                sb.AppendLine("\t-e/--execute\t\tExecute the WASM file based on the start section.");
+                sb.AppendLine("\t-r/--run [id]\t\tExecutes the WASM function [id].");
+            }
+
+            return sb.ToString();
+        }
+    }
+
+    class Program
+    {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
 
         public static int Main(string[] args)
         {
@@ -203,19 +180,23 @@ namespace WebAssemblyCS
 
             if (options.Help)
             {
-                Console.WriteLine(options.GetHelp());
+                logger.Info(options.GetHelp());
                 return 1;
             }
             else
             {
-                if(options.Version)
-                {
-                    Console.WriteLine(options.GetNameAndVersion());
-                }
+                logger.Info($"{Process.GetCurrentProcess().ProcessName} {FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location).ProductVersion}");
 
                 if (options.Debug)
                 {
-                    Console.WriteLine(options.GetWarnings());
+                    LogManager.Configuration.Variables["minimumLogLevel"] = "Trace";
+                    LogManager.ReconfigExistingLoggers();
+
+                }
+                else if (options.Verbose)
+                {
+                    LogManager.Configuration.Variables["minimumLogLevel"] = "Debug";
+                    LogManager.ReconfigExistingLoggers();
                 }
             }
 
@@ -227,6 +208,7 @@ namespace WebAssemblyCS
 
                 if (options.Run != null)
                 {
+                    logger.Debug($"Setting start section to {options.Run}.");
                     file.start = new StartSection((uint)options.Run);
                 }
 
@@ -238,7 +220,7 @@ namespace WebAssemblyCS
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Exception: " + ex.Message);
+                logger.Fatal(ex, $"Exception: {ex.Message}");
             }
 
             return 0;

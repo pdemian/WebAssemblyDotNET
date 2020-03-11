@@ -5,11 +5,14 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using WebAssemblyDotNET.Components;
+using NLog;
 
 namespace WebAssemblyDotNET
 {
     internal class WASMMemoryManager
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         public long current;
         public long maximum;
         public long page_size;
@@ -33,7 +36,12 @@ namespace WebAssemblyDotNET
 
         public bool grow_memory(uint num_pages)
         {
+            logger.Debug("Growing memory.");
+            logger.ConditionalTrace($"Current num_pages = {current}, new is {num_pages}.");
+
             long ideal_size = current + num_pages * page_size;
+
+            logger.ConditionalTrace($"{ideal_size} > {maximum} = {ideal_size > maximum}.");
 
             if (ideal_size > maximum) return false;
 
@@ -44,6 +52,7 @@ namespace WebAssemblyDotNET
             }
             catch (Exception)
             {
+                logger.Debug("Out of memory.");
                 return false;
             }
 
@@ -51,6 +60,7 @@ namespace WebAssemblyDotNET
 
             memory = new_mem;
 
+            logger.ConditionalTrace("Successfully grown memory.");
             return true;
         }
     }
@@ -65,6 +75,8 @@ namespace WebAssemblyDotNET
 
     public class WASMActivationObject
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         public uint pc;
         public FunctionInstance function;
         public WASMValueObject[] parameters;
@@ -72,12 +84,24 @@ namespace WebAssemblyDotNET
 
         public WASMActivationObject(FunctionInstance function, WASMValueObject[] parameters)
         {
-            if(parameters == null)
+            logger.Debug($"Expected parameters: {function.parameters.Length}, Actual: {(parameters == null ? 0 : parameters.Length)}.");
+
+            if (parameters == null)
             {
                 if (function.parameters.Length != 0) throw new Exception("Corrupt Code");
             }
             else if (!Enumerable.SequenceEqual(parameters.Select(x => x.type), function.parameters))
             {
+                logger.Debug("Sequence of parameters do not match.");
+
+                if(function.parameters.Length == parameters.Length)
+                {
+                    for (int i = 0; i < parameters.Length; i++)
+                    {
+                        logger.ConditionalTrace($"{i}th parameter type expected: {function.parameters[i]}, actual: {parameters[i].type}.");
+                    }
+                }
+
                 throw new Exception("Corrupt Code");
             }
 
@@ -170,6 +194,11 @@ namespace WebAssemblyDotNET
         {
             return (double)value;
         }
+
+        public override string ToString()
+        {
+            return $"({type},{value})";
+        }
     }
 
     public class FunctionInstance
@@ -234,6 +263,8 @@ namespace WebAssemblyDotNET
 
     public class WebAssemblyExecutionContext
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         // https://webassembly.github.io/spec/core/exec/runtime.html#store
         public readonly Dictionary<uint, FunctionInstance> functions = new Dictionary<uint, FunctionInstance>();
         public readonly Dictionary<uint, MemoryInstance> linear_memory = new Dictionary<uint, MemoryInstance>();
@@ -262,43 +293,79 @@ namespace WebAssemblyDotNET
 
         private void InitTable(WASMFile file)
         {
+            logger.Debug("Instanciating Table.");
+
             for (uint i = 0; i < (uint)file.table.entries.Length; i++)
             {
                 var entry = file.table.entries[i];
 
+                logger.ConditionalTrace($"Instanciating TableInstance({entry.element_type}, {entry.limits.initial}, {entry.limits.maximum ?? 0}).");
+
                 tables[i] = new TableInstance(entry.element_type, entry.limits.initial, entry.limits.maximum);
             }
+
+            logger.Debug("Done instanciating Table.");
         }
         private void InitGlobal(WASMFile file)
         {
+            logger.Debug("Instanciating Globals.");
+
+            List<GlobalInstance> finalized_globals = new List<GlobalInstance>();
+
             for (uint i = 0; i < (uint)file.global.globals.Length; i++)
             {
                 var global = file.global.globals[i];
 
-                globals[i] = new GlobalInstance(global.type.mutability, global.type.content_type, null);
+                var value = WebAssemblyHelper.GetInitExpr(global.init, finalized_globals);
+
+                logger.ConditionalTrace($"Instanciating GlobalInstance({global.type.mutability}, {global.type.content_type}, {value}).");
+
+                globals[i] = new GlobalInstance(global.type.mutability, global.type.content_type, value);
+
+                finalized_globals.Add(globals[i]);
             }
+
+            logger.Debug("Done instanciating Globals.");
         }
         private void InitMemory(WASMFile file)
         {
+            logger.Debug("Instanciating Memory.");
+
             for (uint i = 0; i < (uint)file.memory.entries.Length; i++)
             {
                 var limits = file.memory.entries[i].limits;
 
+                logger.ConditionalTrace($"Instanciating MemoryInstance({limits.initial}, {limits.maximum}).");
+
                 linear_memory[i] = new MemoryInstance(limits.initial, limits.maximum);
             }
+
+            logger.Debug("Done instanciating Memory.");
         }
         private void InitData(WASMFile file)
         {
+            logger.Debug("Instanciating Data.");
+
             foreach (var entry in file.data.entries)
             {
-                Array.Copy(entry.data, 0, linear_memory[entry.memory_index].memory, WebAssemblyHelper.GetOffset(entry.offset), entry.data.Length);
+                var offset = WebAssemblyHelper.GetOffset(entry.offset);
+
+                logger.ConditionalTrace($"Copying: {BitConverter.ToString(entry.data).Replace("-", "")} to [{offset},{offset+entry.data.Length}].");
+
+                Array.Copy(entry.data, 0, linear_memory[entry.memory_index].memory, offset, entry.data.Length);
             }
+
+            logger.Debug("Done instanciating Data.");
         }
         private void InitExport(WASMFile file)
         {
+            logger.Debug("Instanciating Export.");
+
             for (uint i = 0; i < (uint)file.export.entries.Length; i++)
             {
                 var entry = file.export.entries[i];
+
+                logger.ConditionalTrace($"Export is {entry.index}: {entry.kind} {entry.field_str}.");
 
                 switch (entry.kind)
                 {
@@ -309,19 +376,26 @@ namespace WebAssemblyDotNET
                         break;
                 }
             }
+
+            logger.Debug("Done instanciating Export.");
         }
         private void InitImport(WASMFile file)
         {
+            logger.Debug("Instanciating Export.");
+
             Dictionary<uint, FuncType> type_info = new Dictionary<uint, FuncType>();
 
             for (uint i = 0; i < (uint)file.type.entries.Length; i++)
             {
                 type_info[i] = file.type.entries[i];
+                logger.ConditionalTrace($"Type {i} = {file.type.entries[i]}.");
             }
 
             for (uint i = 0; i < (uint)file.import.entries.Length; i++)
             {
                 var entry = file.import.entries[i];
+
+                logger.Debug($"Entry = {entry}.");
 
                 switch (entry.kind)
                 {
@@ -335,22 +409,31 @@ namespace WebAssemblyDotNET
                             parameters = type_info[index].param_types,
                             return_type = type_info[index].return_type
                         };
+
+                        logger.ConditionalTrace($"Function {i} = {functions[i]}.");
                         break;
                 }
             }
+
+            logger.Debug("Done instanciating Export.");
         }
         private void InitFunctions(WASMFile file)
         {
+            logger.Debug("Instanciating Functions.");
+
             Dictionary<uint, FuncType> type_info = new Dictionary<uint, FuncType>();
 
             for (uint i = 0; i < (uint)file.type.entries.Length; i++)
             {
                 type_info[i] = file.type.entries[i];
+                logger.ConditionalTrace($"Type {i} = {file.type.entries[i]}.");
             }
 
+            logger.ConditionalTrace($"file.function.types.Length = {file.function.types.Length} and file.code.bodies.Length = {file.code.bodies.Length}.");
             if (file.function.types.Length != file.code.bodies.Length) throw new Exception("Invalid file");
 
             uint import_count = (uint)functions.Count;
+            logger.ConditionalTrace($"Import count = {import_count}.");
 
             for (uint i = 0; i < (uint)file.code.bodies.Length; i++)
             {
@@ -358,6 +441,8 @@ namespace WebAssemblyDotNET
                 FunctionBody body = file.code.bodies[i];
 
                 uint func_indx = i + import_count;
+
+                logger.ConditionalTrace($"Function {func_indx} = {body}.");
 
                 functions[func_indx] = new FunctionInstance
                 {
@@ -375,50 +460,67 @@ namespace WebAssemblyDotNET
                     locals_unwrapped.AddRange(Enumerable.Repeat(local.type, (int)local.count));
                 }
 
-                functions[i].locals = locals_unwrapped.ToArray();
+                functions[func_indx].locals = locals_unwrapped.ToArray();
+
+                logger.ConditionalTrace($"Final object = {functions[func_indx]}.");
             }
+
+            logger.Debug("Done instanciating Functions.");
         }
 
         public void Push(WASMActivationObject obj)
         {
             stack_objects.Push(WASMStackObjectType.ActivationObject);
             callstack.Push(obj);
+            logger.ConditionalTrace($"Pushed Activation Object: {obj}.");
         }
         public void Push(WASMLabelObject obj)
         {
             stack_objects.Push(WASMStackObjectType.LabelObject);
             labels.Push(obj);
+            logger.ConditionalTrace($"Pushed Label: {obj}.");
         }
         public void Push(WASMValueObject obj)
         {
             stack_objects.Push(WASMStackObjectType.ValueObject);
             values.Push(obj);
+            logger.ConditionalTrace($"Pushed Value: {obj}.");
         }
 
         public WASMActivationObject GetCurrentFunction()
         {
+            logger.ConditionalTrace($"Current function = {callstack.Peek()}.");
+
             return callstack.Peek();
         }
 
         public WASMStackObjectType Peek()
         {
             if (stack_objects.Count == 0) return WASMStackObjectType.Empty;
-            return stack_objects.Peek();
+            var ret = stack_objects.Peek();
+            logger.ConditionalTrace($"Peeking {ret}.");
+            return ret;
         }
         public WASMActivationObject PopActivation()
         {
             if (stack_objects.Pop() != WASMStackObjectType.ActivationObject) throw new Exception("Library error!");
-            return callstack.Pop();
+            var ret = callstack.Pop();
+            logger.ConditionalTrace($"Popping Activation: {ret}.");
+            return ret;
         }
         public WASMLabelObject PopLabel()
         {
             if (stack_objects.Pop() != WASMStackObjectType.LabelObject) throw new Exception("Library error!");
-            return labels.Pop();
+            var ret = labels.Pop();
+            logger.ConditionalTrace($"Popping Label: {ret}.");
+            return ret;
         }
         public WASMValueObject PopValue()
         {
             if (stack_objects.Pop() != WASMStackObjectType.ValueObject) throw new Exception("Library error!");
-            return values.Pop();
+            var ret = values.Pop();
+            logger.ConditionalTrace($"Popping Value: {ret}.");
+            return ret;
         }
     }
 
@@ -443,6 +545,8 @@ namespace WebAssemblyDotNET
 
     public class WebAssemblyInterpreter
     {
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         public readonly WASMFile file;
 
         public WebAssemblyInterpreter(WASMFile file)
@@ -450,29 +554,10 @@ namespace WebAssemblyDotNET
             this.file = file;
         }
 
-        private void InitVariables(WebAssemblyExecutionContext ctx)
-        {
-            if(file.data != null)
-            {
-                // TODO: Should data be initialized here?
-                // I don't think so as it's only supposed to be an i32.const
-            }
-
-            // TODO: Element
-
-            if (file.global != null)
-            {
-                for (uint i = 0; i < (uint)file.global.globals.Length; i++)
-                {
-                    var global = file.global.globals[i];
-
-                    ctx.globals[i].value = WebAssemblyHelper.GetInitExpr(global.init, ctx.globals.Values.ToArray());
-                }
-            }
-        }
-
         private void ResolveExternalFunctions(WebAssemblyExecutionContext ctx)
         {
+            logger.Debug("Begin Resolving External Functions.");
+
             foreach (var func in ctx.functions)
             {
                 if (!func.Value.is_in_module)
@@ -480,7 +565,10 @@ namespace WebAssemblyDotNET
                     switch (func.Value.name)
                     {
                         case "puts":
+                            logger.Debug("Binding environment call 'puts'.");
+
                             func.Value.host_code = (args) => {
+                                logger.Trace("Calling host_code for puts.");
                                 unsafe
                                 {
                                     fixed (byte* arr = ctx.linear_memory[0].memory)
@@ -494,6 +582,8 @@ namespace WebAssemblyDotNET
                     }
                 }
             }
+
+            logger.Debug("Done Resolving External Functions.");
         }
 
         public int Run()
@@ -506,13 +596,15 @@ namespace WebAssemblyDotNET
             WebAssemblyExecutionContext ctx = new WebAssemblyExecutionContext(file);
 
             ResolveExternalFunctions(ctx);
-            InitVariables(ctx);
 
             uint start_func = file.start.index;
+            logger.Debug($"Start function index is {start_func}. This index does {(ctx.functions.ContainsKey(start_func)?"not" : "")} exist.");
             if (!ctx.functions.ContainsKey(start_func)) throw new Exception("Corrupt file.");
 
             // Execute starting from the start_func
             var result = Invoke(ctx, start_func);
+
+            logger.Debug($"Final result is {result}.");
 
             // I'm not sure what valid result types are for main
             // What about void? Is that valid or is it simply 0?

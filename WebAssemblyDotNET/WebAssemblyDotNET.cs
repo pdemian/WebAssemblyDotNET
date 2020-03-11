@@ -3,6 +3,7 @@ using System.IO;
 using WebAssemblyDotNET.Sections;
 using WebAssemblyDotNET.Components;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 
 namespace WebAssemblyDotNET
 {
@@ -21,6 +22,20 @@ namespace WebAssemblyDotNET
             [FieldOffset(0)] public ulong ui64;
             [FieldOffset(0)] public float f32;
             [FieldOffset(0)] public double f64;
+        }
+
+        internal static byte popcount(ulong value)
+        {
+            ulong result = value - ((value >> 1) & 0x5555555555555555UL);
+            result = (result & 0x3333333333333333UL) + ((result >> 2) & 0x3333333333333333UL);
+            return (byte)(unchecked(((result + (result >> 4)) & 0xF0F0F0F0F0F0F0FUL) * 0x101010101010101UL) >> 56);
+        }
+
+        internal static byte popcount(uint value)
+        {
+            uint result = value - ((value >> 1) & 0x55555555U);
+            result = (result & 0x33333333U) + ((result >> 2) & 0x33333333U);
+            return (byte)(unchecked(((result + (result >> 4)) & 0x0F0F0F0FU) * 0x01010101U) >> 24);
         }
 
         internal static bool IsValueType(WASMType type)
@@ -69,7 +84,7 @@ namespace WebAssemblyDotNET
             return value;
         }
 
-        internal static WASMValueObject GetInitExpr(InitExpr init, GlobalInstance[] initialized_globals)
+        internal static WASMValueObject GetInitExpr(InitExpr init, List<GlobalInstance> initialized_globals)
         {
             if (init.expr.Length < 3) throw new Exception("Unexpected init expression.");
 
@@ -92,7 +107,7 @@ namespace WebAssemblyDotNET
                     ret = new WASMValueObject(BitConverter.ToDouble(init.expr, (int)pc));
                     break;
                 case (byte)WASMOpcodes.GLOBAL_GET:
-                    GlobalInstance gi = initialized_globals[LEB128.ReadUInt32(init.expr, ref pc)];
+                    GlobalInstance gi = initialized_globals[LEB128.ReadInt32(init.expr, ref pc)];
                     if (!gi.is_mutable) throw new Exception("Unexpected init expression.");
                     ret = gi.value;
                     break;
@@ -728,6 +743,7 @@ namespace WebAssemblyDotNET
                         if ((function != null && code == null) || (function == null && code != null)) throw new Exception("File corrupt. Must include both function and code sections.");
                         if (function.types.Length != code.bodies.Length) throw new Exception("File corrupt. Function and code sections do not match up.");
 
+                        // TODO: I don't actually check if data overlaps
 
                         // TODO: Validate everything in this list
                         // https://webassembly.github.io/spec/core/valid/modules.html
