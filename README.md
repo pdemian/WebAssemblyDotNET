@@ -18,7 +18,7 @@ A work in progress Web Assembly <--> .NET binding.
  * Add more supported opcodes to execute
  * More tests
  * Disassemble wasm to wat
- * Determine consistent API prefix (WASM or WebAssembly)
+ * ~~Determine consistent API prefix (WASM or WebAssembly)~~
 
 ## Contributing
 

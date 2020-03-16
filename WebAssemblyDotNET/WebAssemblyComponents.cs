@@ -11,31 +11,31 @@ namespace WebAssemblyDotNET
         // https://webassembly.github.io/spec/core/binary/types.html#function-types
         public class FuncType : WebAssemblyComponent
         {
-            public readonly WASMType[] param_types;
-            public readonly WASMType? return_type;
+            public readonly WebAssemblyType[] param_types;
+            public readonly WebAssemblyType? return_type;
 
-            public FuncType(WASMType[] param_types, WASMType? return_type)
+            public FuncType(WebAssemblyType[] param_types, WebAssemblyType? return_type)
             {
                 this.param_types = param_types ?? throw new ArgumentException(nameof(param_types));
                 this.return_type = return_type;
 
                 if (param_types.Any(x => !WebAssemblyHelper.IsValueType(x))) throw new ArgumentException(nameof(param_types));
 
-                if (return_type != null && !WebAssemblyHelper.IsValueType((WASMType)this.return_type)) throw new ArgumentException(nameof(return_type));
+                if (return_type != null && !WebAssemblyHelper.IsValueType((WebAssemblyType)this.return_type)) throw new ArgumentException(nameof(return_type));
             }
 
             public FuncType(BinaryReader reader)
             {
                 int form = LEB128.ReadInt7(reader);
-                if (form != (int)WASMType.func) throw new Exception($"File is invalid. Expected byte '{WASMType.func}', received '{form}'.");
+                if (form != (int)WebAssemblyType.func) throw new Exception($"File is invalid. Expected byte '{WebAssemblyType.func}', received '{form}'.");
 
                 uint param_count = LEB128.ReadUInt32(reader);
                 if (param_count > int.MaxValue) throw new NotImplementedException($"Count larger than {int.MaxValue} bytes not supported.");
-                param_types = new WASMType[param_count];
+                param_types = new WebAssemblyType[param_count];
 
                 for (uint i = 0; i < param_count; i++)
                 {
-                    param_types[i] = (WASMType)LEB128.ReadInt7(reader);
+                    param_types[i] = (WebAssemblyType)LEB128.ReadInt7(reader);
                     if (!WebAssemblyHelper.IsValueType(param_types[i])) throw new Exception($"File is invalid. Expected valid value type, received '{param_types[i]}'.");
                 }
 
@@ -44,14 +44,14 @@ namespace WebAssemblyDotNET
 
                 if (return_count == 1)
                 {
-                    return_type = (WASMType)LEB128.ReadInt7(reader);
-                    if (!WebAssemblyHelper.IsValueType((WASMType)return_type)) throw new Exception($"File is invalid. Expected valid value type, received '{return_type}'.");
+                    return_type = (WebAssemblyType)LEB128.ReadInt7(reader);
+                    if (!WebAssemblyHelper.IsValueType((WebAssemblyType)return_type)) throw new Exception($"File is invalid. Expected valid value type, received '{return_type}'.");
                 }
             }
 
             public override void Save(BinaryWriter writer)
             {
-                LEB128.WriteInt7(writer, (sbyte)WASMType.func);
+                LEB128.WriteInt7(writer, (sbyte)WebAssemblyType.func);
                 LEB128.WriteUInt32(writer, (uint)param_types.Length);
                 for (uint i = 0; i < param_types.Length; i++)
                 {
@@ -121,12 +121,12 @@ namespace WebAssemblyDotNET
         // https://webassembly.github.io/spec/core/binary/types.html#table-types
         public class TableType : WebAssemblyComponent
         {
-            public readonly WASMType element_type;
+            public readonly WebAssemblyType element_type;
             public readonly ResizeLimit limits;
 
-            public TableType(WASMType element_type, ResizeLimit limits)
+            public TableType(WebAssemblyType element_type, ResizeLimit limits)
             {
-                if (element_type != WASMType.anyfunc) throw new ArgumentException(nameof(element_type));
+                if (element_type != WebAssemblyType.anyfunc) throw new ArgumentException(nameof(element_type));
                 this.element_type = element_type;
                 this.limits = limits ?? throw new ArgumentException(nameof(limits));
             }
@@ -134,8 +134,8 @@ namespace WebAssemblyDotNET
             public TableType(BinaryReader reader)
             {
                 sbyte type = LEB128.ReadInt7(reader);
-                if(type != (int)WASMType.anyfunc) throw new Exception($"File is invalid. Expected byte '{WASMType.anyfunc}', received '{type}'.");
-                element_type = WASMType.anyfunc;
+                if(type != (int)WebAssemblyType.anyfunc) throw new Exception($"File is invalid. Expected byte '{WebAssemblyType.anyfunc}', received '{type}'.");
+                element_type = WebAssemblyType.anyfunc;
                 limits = new ResizeLimit(reader);
             }
 
@@ -180,10 +180,10 @@ namespace WebAssemblyDotNET
         // https://webassembly.github.io/spec/core/binary/types.html#global-types
         public class GlobalType : WebAssemblyComponent
         {
-            public readonly WASMType content_type;
+            public readonly WebAssemblyType content_type;
             public readonly bool mutability;
 
-            public GlobalType(WASMType content_type, bool mutability)
+            public GlobalType(WebAssemblyType content_type, bool mutability)
             {
                 if (!WebAssemblyHelper.IsValueType(content_type)) throw new ArgumentException(nameof(content_type));
 
@@ -193,7 +193,7 @@ namespace WebAssemblyDotNET
 
             public GlobalType(BinaryReader reader)
             {
-                content_type = (WASMType)LEB128.ReadUInt7(reader);
+                content_type = (WebAssemblyType)LEB128.ReadUInt7(reader);
 
                 if (!WebAssemblyHelper.IsValueType(content_type)) throw new Exception($"File is invalid. Expected value type, received '{content_type}'.");
 
@@ -221,10 +221,10 @@ namespace WebAssemblyDotNET
         {
             public readonly string module_str;
             public readonly string field_str;
-            public readonly WASMExternalKind kind;
+            public readonly WebAssemblyExternalKind kind;
             public readonly object type;
 
-            private ImportEntry(string module_str, string field_str, WASMExternalKind kind, object type)
+            private ImportEntry(string module_str, string field_str, WebAssemblyExternalKind kind, object type)
             {
                 this.module_str = module_str ?? throw new ArgumentException(nameof(module_str));
                 this.field_str = field_str ?? throw new ArgumentException(nameof(field_str));
@@ -232,10 +232,10 @@ namespace WebAssemblyDotNET
                 this.type = type ?? throw new ArgumentException(nameof(type));
             }
 
-            public ImportEntry(string module_str, string field_str, uint type) : this(module_str, field_str, WASMExternalKind.Function, type){}
-            public ImportEntry(string module_str, string field_str, TableType type) : this(module_str, field_str, WASMExternalKind.Table, type){}
-            public ImportEntry(string module_str, string field_str, MemoryType type) : this(module_str, field_str, WASMExternalKind.Memory, type){}
-            public ImportEntry(string module_str, string field_str, GlobalType type) : this(module_str, field_str, WASMExternalKind.Global, type){}
+            public ImportEntry(string module_str, string field_str, uint type) : this(module_str, field_str, WebAssemblyExternalKind.Function, type){}
+            public ImportEntry(string module_str, string field_str, TableType type) : this(module_str, field_str, WebAssemblyExternalKind.Table, type){}
+            public ImportEntry(string module_str, string field_str, MemoryType type) : this(module_str, field_str, WebAssemblyExternalKind.Memory, type){}
+            public ImportEntry(string module_str, string field_str, GlobalType type) : this(module_str, field_str, WebAssemblyExternalKind.Global, type){}
 
             public ImportEntry(BinaryReader reader)
             {
@@ -249,24 +249,24 @@ namespace WebAssemblyDotNET
 
                 byte tmp_kind = reader.ReadByte();
 
-                if (!Enum.IsDefined(typeof(WASMExternalKind), tmp_kind)) throw new Exception($"File is invalid. Expected 0, 1, 2, or 3, received '{tmp_kind}'.");
+                if (!Enum.IsDefined(typeof(WebAssemblyExternalKind), tmp_kind)) throw new Exception($"File is invalid. Expected 0, 1, 2, or 3, received '{tmp_kind}'.");
 
-                kind = (WASMExternalKind)tmp_kind;
+                kind = (WebAssemblyExternalKind)tmp_kind;
 
                 switch (kind)
                 {
-                    case WASMExternalKind.Function:
+                    case WebAssemblyExternalKind.Function:
                         type = LEB128.ReadUInt32(reader);
                         break;
-                    case WASMExternalKind.Table:
+                    case WebAssemblyExternalKind.Table:
                         var table_tmp = new TableType(reader);
                         type = table_tmp;
                         break;
-                    case WASMExternalKind.Memory:
+                    case WebAssemblyExternalKind.Memory:
                         var memory_tmp = new MemoryType(reader);
                         type = memory_tmp;
                         break;
-                    case WASMExternalKind.Global:
+                    case WebAssemblyExternalKind.Global:
                         var global_tmp = new GlobalType(reader);
                         type = global_tmp;
                         break;
@@ -286,16 +286,16 @@ namespace WebAssemblyDotNET
 
                 switch (kind)
                 {
-                    case WASMExternalKind.Function:
+                    case WebAssemblyExternalKind.Function:
                         LEB128.WriteUInt32(writer, (uint)type);
                         break;
-                    case WASMExternalKind.Table:
+                    case WebAssemblyExternalKind.Table:
                         ((TableType)type).Save(writer);
                         break;
-                    case WASMExternalKind.Memory:
+                    case WebAssemblyExternalKind.Memory:
                         ((MemoryType)type).Save(writer);
                         break;
-                    case WASMExternalKind.Global:
+                    case WebAssemblyExternalKind.Global:
                         ((GlobalType)type).Save(writer);
                         break;
                 }
@@ -310,16 +310,16 @@ namespace WebAssemblyDotNET
 
                 switch (kind)
                 {
-                    case WASMExternalKind.Function:
+                    case WebAssemblyExternalKind.Function:
                         size += LEB128.SizeOf((uint)type);
                         break;
-                    case WASMExternalKind.Table:
+                    case WebAssemblyExternalKind.Table:
                         size += ((TableType)type).SizeOf();
                         break;
-                    case WASMExternalKind.Memory:
+                    case WebAssemblyExternalKind.Memory:
                         size += ((MemoryType)type).SizeOf();
                         break;
-                    case WASMExternalKind.Global:
+                    case WebAssemblyExternalKind.Global:
                         size += ((GlobalType)type).SizeOf();
                         break;
                 }
@@ -366,14 +366,14 @@ namespace WebAssemblyDotNET
         public class ExportEntry : WebAssemblyComponent
         {
             public readonly string field_str;
-            public readonly WASMExternalKind kind;
+            public readonly WebAssemblyExternalKind kind;
             public readonly uint index;
 
-            public ExportEntry(string field_str, WASMExternalKind kind, uint index)
+            public ExportEntry(string field_str, WebAssemblyExternalKind kind, uint index)
             {
                 this.field_str = field_str ?? throw new ArgumentException(nameof(field_str));
                 this.index = index;
-                if (!Enum.IsDefined(typeof(WASMExternalKind), kind)) throw new ArgumentException(nameof(kind));
+                if (!Enum.IsDefined(typeof(WebAssemblyExternalKind), kind)) throw new ArgumentException(nameof(kind));
                 this.kind = kind;
             }
 
@@ -385,9 +385,9 @@ namespace WebAssemblyDotNET
 
                 var tmp_kind = reader.ReadByte();
 
-                if (!Enum.IsDefined(typeof(WASMExternalKind), tmp_kind)) throw new Exception($"File is invalid. Expected byte 0, 1, 2, or 3, received '{tmp_kind}'.");
+                if (!Enum.IsDefined(typeof(WebAssemblyExternalKind), tmp_kind)) throw new Exception($"File is invalid. Expected byte 0, 1, 2, or 3, received '{tmp_kind}'.");
 
-                kind = (WASMExternalKind)tmp_kind;
+                kind = (WebAssemblyExternalKind)tmp_kind;
 
                 index = LEB128.ReadUInt32(reader);
             }
@@ -466,7 +466,7 @@ namespace WebAssemblyDotNET
                 this.locals = locals ?? throw new ArgumentException(nameof(locals));
                 this.code = code ?? throw new ArgumentException(nameof(code));
 
-                if (code.Length == 0 || code[code.Length - 1] != (int)WASMOpcodes.END) throw new ArgumentException(nameof(code));
+                if (code.Length == 0 || code[code.Length - 1] != (int)WebAssemblyOpcode.END) throw new ArgumentException(nameof(code));
             }
 
             public FunctionBody(BinaryReader reader)
@@ -491,7 +491,7 @@ namespace WebAssemblyDotNET
 
                 code = reader.ReadBytes((int)(body_size - (after_pos - before_pos)));
 
-                if (code[code.Length - 1] != (byte)WASMOpcodes.END) throw new Exception($"File is invalid. Expected byte {WASMOpcodes.END}, received {code[code.Length-1]}.");
+                if (code[code.Length - 1] != (byte)WebAssemblyOpcode.END) throw new Exception($"File is invalid. Expected byte {WebAssemblyOpcode.END}, received {code[code.Length-1]}.");
             }
 
             public override void Save(BinaryWriter writer)
@@ -521,11 +521,11 @@ namespace WebAssemblyDotNET
         public class LocalEntry : WebAssemblyComponent
         {
             public readonly uint count;
-            public readonly WASMType type;
+            public readonly WebAssemblyType type;
 
-            public LocalEntry(uint count, WASMType type)
+            public LocalEntry(uint count, WebAssemblyType type)
             {
-                if (!Enum.IsDefined(typeof(WASMType), type)) throw new ArgumentException(nameof(type));
+                if (!Enum.IsDefined(typeof(WebAssemblyType), type)) throw new ArgumentException(nameof(type));
 
                 this.count = count;
                 this.type = type;
@@ -537,9 +537,9 @@ namespace WebAssemblyDotNET
 
                 var tmp_type = reader.ReadByte();
 
-                if (!Enum.IsDefined(typeof(WASMType), tmp_type)) throw new Exception($"File is invalid. Expected WASMType, received '{tmp_type}'.");
+                if (!Enum.IsDefined(typeof(WebAssemblyType), tmp_type)) throw new Exception($"File is invalid. Expected WebAssemblyType, received '{tmp_type}'.");
 
-                type = (WASMType)tmp_type;
+                type = (WebAssemblyType)tmp_type;
             }
 
             public override void Save(BinaryWriter writer)
@@ -599,7 +599,7 @@ namespace WebAssemblyDotNET
             public InitExpr(byte[] expr)
             {
                 this.expr = expr ?? throw new ArgumentException(nameof(expr));
-                if (expr.Length < 1 || expr[expr.Length - 1] != (byte)WASMOpcodes.END) throw new ArgumentException(nameof(expr));
+                if (expr.Length < 1 || expr[expr.Length - 1] != (byte)WebAssemblyOpcode.END) throw new ArgumentException(nameof(expr));
             }
 
             public InitExpr(BinaryReader reader)
@@ -609,7 +609,7 @@ namespace WebAssemblyDotNET
                 {
                     if (b == -1) throw new Exception($"File is invalid. Unexpected EOF.");
                     code.Add((byte)b);
-                    if (b == (byte)WASMOpcodes.END) break;
+                    if (b == (byte)WebAssemblyOpcode.END) break;
                 }
 
                 expr = code.ToArray();

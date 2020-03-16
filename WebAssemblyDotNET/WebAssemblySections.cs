@@ -9,7 +9,7 @@ namespace WebAssemblyDotNET
     namespace Sections
     {
         // https://webassembly.github.io/spec/core/binary/modules.html#custom-section
-        public class CustomSection : WASMSection
+        public class CustomSection : WebAssemblySection
         {
             public readonly string name;
             public readonly byte[] payload_data;
@@ -25,7 +25,7 @@ namespace WebAssemblyDotNET
                 payload_data = reader.ReadBytes((int)payload_size);
             }
 
-            public CustomSection(string name, byte[] payload_data) : base(WASMModuleID.Custom)
+            public CustomSection(string name, byte[] payload_data) : base(WebAssemblyModuleID.Custom)
             {
                 if(payload_data.LongLength > int.MaxValue) throw new NotImplementedException($"Payload longer than {int.MaxValue} bytes not supported.");
 
@@ -56,11 +56,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#type-section
-        public class TypeSection : WASMSection
+        public class TypeSection : WebAssemblySection
         {
             public readonly FuncType[] entries;
 
-            public TypeSection(FuncType[] entries) : base(WASMModuleID.Type)
+            public TypeSection(FuncType[] entries) : base(WebAssemblyModuleID.Type)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
                 payload_len = SizeOf() - base.SizeOf();
@@ -96,11 +96,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#import-section
-        public class ImportSection : WASMSection
+        public class ImportSection : WebAssemblySection
         {
             public readonly ImportEntry[] entries;
 
-            public ImportSection(ImportEntry[] entries) : base(WASMModuleID.Import)
+            public ImportSection(ImportEntry[] entries) : base(WebAssemblyModuleID.Import)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
                 payload_len = SizeOf() - base.SizeOf();
@@ -134,11 +134,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#binary-funcsec
-        public class FunctionSection : WASMSection
+        public class FunctionSection : WebAssemblySection
         {
             public readonly uint[] types;
 
-            public FunctionSection(uint[] types) : base(WASMModuleID.Function)
+            public FunctionSection(uint[] types) : base(WebAssemblyModuleID.Function)
             {
                 this.types = types ?? throw new ArgumentException(nameof(types));
                 payload_len = SizeOf() - base.SizeOf();
@@ -172,11 +172,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#table-section
-        public class TableSection : WASMSection
+        public class TableSection : WebAssemblySection
         {
             public readonly TableType[] entries;
 
-            public TableSection(TableType[] entries) : base(WASMModuleID.Table)
+            public TableSection(TableType[] entries) : base(WebAssemblyModuleID.Table)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
                 payload_len = SizeOf() - base.SizeOf();
@@ -210,11 +210,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#memory-section
-        public class MemorySection : WASMSection
+        public class MemorySection : WebAssemblySection
         {
             public readonly MemoryType[] entries;
 
-            public MemorySection(MemoryType[] entries) : base(WASMModuleID.Memory)
+            public MemorySection(MemoryType[] entries) : base(WebAssemblyModuleID.Memory)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
                 payload_len = SizeOf() - base.SizeOf();
@@ -248,11 +248,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#global-section
-        public class GlobalSection : WASMSection
+        public class GlobalSection : WebAssemblySection
         {
             public readonly GlobalVariable[] globals;
 
-            public GlobalSection(GlobalVariable[] globals) : base(WASMModuleID.Global)
+            public GlobalSection(GlobalVariable[] globals) : base(WebAssemblyModuleID.Global)
             {
                 this.globals = globals ?? throw new ArgumentException(nameof(globals));
                 payload_len = SizeOf() - base.SizeOf();
@@ -286,11 +286,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#export-section
-        public class ExportSection : WASMSection
+        public class ExportSection : WebAssemblySection
         {
             public readonly ExportEntry[] entries;
 
-            public ExportSection(ExportEntry[] entries) : base(WASMModuleID.Export)
+            public ExportSection(ExportEntry[] entries) : base(WebAssemblyModuleID.Export)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
                 payload_len = SizeOf() - base.SizeOf();
@@ -324,11 +324,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#start-section
-        public class StartSection : WASMSection
+        public class StartSection : WebAssemblySection
         {
             public readonly uint index;
 
-            public StartSection(uint index) : base(WASMModuleID.Start)
+            public StartSection(uint index) : base(WebAssemblyModuleID.Start)
             {
                 this.index = index;
                 payload_len = LEB128.SizeOf(index);
@@ -352,11 +352,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#element-section
-        public class ElementSection : WASMSection
+        public class ElementSection : WebAssemblySection
         {
             public readonly ElementSegment[] entries;
 
-            public ElementSection(ElementSegment[] entries) : base(WASMModuleID.Element)
+            public ElementSection(ElementSegment[] entries) : base(WebAssemblyModuleID.Element)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
                 payload_len = SizeOf() - base.SizeOf();
@@ -390,11 +390,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#code-section
-        public class CodeSection : WASMSection
+        public class CodeSection : WebAssemblySection
         {
             public readonly FunctionBody[] bodies;
 
-            public CodeSection(FunctionBody[] bodies) : base(WASMModuleID.Code)
+            public CodeSection(FunctionBody[] bodies) : base(WebAssemblyModuleID.Code)
             {
                 this.bodies = bodies ?? throw new ArgumentException(nameof(bodies));
                 payload_len = SizeOf() - base.SizeOf();
@@ -428,11 +428,11 @@ namespace WebAssemblyDotNET
         }
 
         // https://webassembly.github.io/spec/core/binary/modules.html#data-section
-        public class DataSection : WASMSection
+        public class DataSection : WebAssemblySection
         {
             public readonly DataSegment[] entries;
 
-            public DataSection(DataSegment[] entries) : base(WASMModuleID.Data)
+            public DataSection(DataSegment[] entries) : base(WebAssemblyModuleID.Data)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
                 payload_len = SizeOf() - base.SizeOf();

@@ -9,7 +9,7 @@ using NLog;
 
 namespace WebAssemblyDotNET
 {
-    internal class WASMMemoryManager
+    internal class WebAssemblyMemoryManager
     {
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
@@ -26,7 +26,7 @@ namespace WebAssemblyDotNET
             }
         }
 
-        public WASMMemoryManager(long current, long maximum, long page_size = 64 * 1024)
+        public WebAssemblyMemoryManager(long current, long maximum, long page_size = 64 * 1024)
         {
             this.current = current;
             this.maximum = maximum;
@@ -65,7 +65,7 @@ namespace WebAssemblyDotNET
         }
     }
 
-    public enum WASMStackObjectType
+    internal enum WebAssemblyStackObjectType
     {
         Empty,
         ActivationObject,
@@ -73,16 +73,16 @@ namespace WebAssemblyDotNET
         ValueObject
     }
 
-    public class WASMActivationObject
+    internal class ActivationObject
     {
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
         public uint pc;
         public FunctionInstance function;
-        public WASMValueObject[] parameters;
-        public WASMValueObject[] locals;
+        public ValueObject[] parameters;
+        public ValueObject[] locals;
 
-        public WASMActivationObject(FunctionInstance function, WASMValueObject[] parameters)
+        public ActivationObject(FunctionInstance function, ValueObject[] parameters)
         {
             logger.Debug($"Expected parameters: {function.parameters.Length}, Actual: {(parameters == null ? 0 : parameters.Length)}.");
 
@@ -107,23 +107,23 @@ namespace WebAssemblyDotNET
 
             this.function = function;
             this.parameters = parameters;
-            locals = new WASMValueObject[function.locals?.Length ?? 0];
+            locals = new ValueObject[function.locals?.Length ?? 0];
 
             for (uint i = 0; i < (locals?.Length ?? 0); i++)
             {
                 switch(function.locals[i])
                 {
-                    case WASMType.i32:
-                        locals[i] = new WASMValueObject(default(uint));
+                    case WebAssemblyType.i32:
+                        locals[i] = new ValueObject(default(uint));
                         break;
-                    case WASMType.i64:
-                        locals[i] = new WASMValueObject(default(ulong));
+                    case WebAssemblyType.i64:
+                        locals[i] = new ValueObject(default(ulong));
                         break;
-                    case WASMType.f32:
-                        locals[i] = new WASMValueObject(default(float));
+                    case WebAssemblyType.f32:
+                        locals[i] = new ValueObject(default(float));
                         break;
-                    case WASMType.f64:
-                        locals[i] = new WASMValueObject(default(double));
+                    case WebAssemblyType.f64:
+                        locals[i] = new ValueObject(default(double));
                         break;
                     default:
                         throw new Exception("Corrupt Code");
@@ -134,44 +134,44 @@ namespace WebAssemblyDotNET
         }
     }
 
-    public class WASMLabelObject
+    internal class LabelObject
     {
         public uint arity;
         public uint branch_target;
 
-        public WASMLabelObject(uint arity, uint branch_target)
+        public LabelObject(uint arity, uint branch_target)
         {
             this.arity = arity;
             this.branch_target = branch_target;
         }
     }
 
-    public class WASMValueObject 
+    internal class ValueObject 
     {
-        public WASMType type;
+        public WebAssemblyType type;
         public object value;
 
-        public WASMValueObject(uint value)
+        public ValueObject(uint value)
         {
-            type = WASMType.i32;
+            type = WebAssemblyType.i32;
             this.value = value;
         }
 
-        public WASMValueObject(ulong value)
+        public ValueObject(ulong value)
         {
-            type = WASMType.i64;
+            type = WebAssemblyType.i64;
             this.value = value;
         }
 
-        public WASMValueObject(float value)
+        public ValueObject(float value)
         {
-            type = WASMType.f32;
+            type = WebAssemblyType.f32;
             this.value = value;
         }
 
-        public WASMValueObject(double value)
+        public ValueObject(double value)
         {
-            type = WASMType.f64;
+            type = WebAssemblyType.f64;
             this.value = value;
         }
 
@@ -201,22 +201,22 @@ namespace WebAssemblyDotNET
         }
     }
 
-    public class FunctionInstance
+    internal class FunctionInstance
     {
         public bool is_in_module = false;
         public bool is_export = false;
         public string module = null;
         public string name = null;
-        public WASMType? return_type = null;
-        public WASMType[] parameters = null;
-        public WASMType[] locals = null;
+        public WebAssemblyType? return_type = null;
+        public WebAssemblyType[] parameters = null;
+        public WebAssemblyType[] locals = null;
         public byte[] code = null;
-        public Action<WASMValueObject[]> host_code;
+        public Action<ValueObject[]> host_code;
     }
-    
-    public class MemoryInstance
+
+    internal class MemoryInstance
     {
-        private WASMMemoryManager mem;
+        private WebAssemblyMemoryManager mem;
 
         public byte[] memory => mem.memory;
         public long size => mem.actual_size;
@@ -226,17 +226,17 @@ namespace WebAssemblyDotNET
 
         public MemoryInstance(uint initial, uint? maximum)
         {
-            mem = new WASMMemoryManager(initial, maximum ?? uint.MaxValue);
+            mem = new WebAssemblyMemoryManager(initial, maximum ?? uint.MaxValue);
         }
     }
 
-    public class GlobalInstance
+    internal class GlobalInstance
     {
         public bool is_mutable;
-        public WASMType type;
-        public WASMValueObject value;
+        public WebAssemblyType type;
+        public ValueObject value;
 
-        public GlobalInstance(bool is_mutable, WASMType type, WASMValueObject value)
+        public GlobalInstance(bool is_mutable, WebAssemblyType type, ValueObject value)
         {
             this.is_mutable = is_mutable;
             this.type = type;
@@ -244,24 +244,24 @@ namespace WebAssemblyDotNET
         }
     }
 
-    public class TableInstance
+    internal class TableInstance
     {
-        public WASMType type;
-        private WASMMemoryManager mem;
+        public WebAssemblyType type;
+        private WebAssemblyMemoryManager mem;
 
         public byte[] memory => mem.memory;
         public long size => mem.actual_size;
 
         public bool GrowMemory(uint num_pages) => mem.grow_memory(num_pages);
 
-        public TableInstance(WASMType type, uint initial, uint? maximum)
+        public TableInstance(WebAssemblyType type, uint initial, uint? maximum)
         {
             this.type = type;
-            mem = new WASMMemoryManager(initial, maximum ?? uint.MaxValue);
+            mem = new WebAssemblyMemoryManager(initial, maximum ?? uint.MaxValue);
         }
     }
 
-    public class WebAssemblyExecutionContext
+    internal class WebAssemblyExecutionContext
     {
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
@@ -272,13 +272,13 @@ namespace WebAssemblyDotNET
         public readonly Dictionary<uint, TableInstance> tables = new Dictionary<uint, TableInstance>();
 
         // A stack can contain the following 3 types of objects
-        public readonly Stack<WASMActivationObject> callstack = new Stack<WASMActivationObject>();
-        public readonly Stack<WASMLabelObject> labels = new Stack<WASMLabelObject>();
-        public readonly Stack<WASMValueObject> values = new Stack<WASMValueObject>();
+        public readonly Stack<ActivationObject> callstack = new Stack<ActivationObject>();
+        public readonly Stack<LabelObject> labels = new Stack<LabelObject>();
+        public readonly Stack<ValueObject> values = new Stack<ValueObject>();
         // For performance reasons, store their types rather than cast the top of the stack
-        public readonly Stack<WASMStackObjectType> stack_objects = new Stack<WASMStackObjectType>();
+        public readonly Stack<WebAssemblyStackObjectType> stack_objects = new Stack<WebAssemblyStackObjectType>();
 
-        public WebAssemblyExecutionContext(WASMFile file)
+        public WebAssemblyExecutionContext(WebAssemblyFile file)
         {
             if (file.table != null) InitTable(file);
             if (file.global != null) InitGlobal(file);
@@ -291,7 +291,7 @@ namespace WebAssemblyDotNET
             // TODO: InitElement(ctx);
         }
 
-        private void InitTable(WASMFile file)
+        private void InitTable(WebAssemblyFile file)
         {
             logger.Debug("Instanciating Table.");
 
@@ -306,7 +306,7 @@ namespace WebAssemblyDotNET
 
             logger.Debug("Done instanciating Table.");
         }
-        private void InitGlobal(WASMFile file)
+        private void InitGlobal(WebAssemblyFile file)
         {
             logger.Debug("Instanciating Globals.");
 
@@ -327,7 +327,7 @@ namespace WebAssemblyDotNET
 
             logger.Debug("Done instanciating Globals.");
         }
-        private void InitMemory(WASMFile file)
+        private void InitMemory(WebAssemblyFile file)
         {
             logger.Debug("Instanciating Memory.");
 
@@ -342,7 +342,7 @@ namespace WebAssemblyDotNET
 
             logger.Debug("Done instanciating Memory.");
         }
-        private void InitData(WASMFile file)
+        private void InitData(WebAssemblyFile file)
         {
             logger.Debug("Instanciating Data.");
 
@@ -357,7 +357,7 @@ namespace WebAssemblyDotNET
 
             logger.Debug("Done instanciating Data.");
         }
-        private void InitExport(WASMFile file)
+        private void InitExport(WebAssemblyFile file)
         {
             logger.Debug("Instanciating Export.");
 
@@ -369,7 +369,7 @@ namespace WebAssemblyDotNET
 
                 switch (entry.kind)
                 {
-                    case WASMExternalKind.Function:
+                    case WebAssemblyExternalKind.Function:
                         var index = entry.index;
                         functions[index].is_export = true;
                         functions[index].name = entry.field_str;
@@ -379,7 +379,7 @@ namespace WebAssemblyDotNET
 
             logger.Debug("Done instanciating Export.");
         }
-        private void InitImport(WASMFile file)
+        private void InitImport(WebAssemblyFile file)
         {
             logger.Debug("Instanciating Export.");
 
@@ -399,7 +399,7 @@ namespace WebAssemblyDotNET
 
                 switch (entry.kind)
                 {
-                    case WASMExternalKind.Function:
+                    case WebAssemblyExternalKind.Function:
                         uint index = (uint)entry.type;
 
                         functions[i] = new FunctionInstance
@@ -417,7 +417,7 @@ namespace WebAssemblyDotNET
 
             logger.Debug("Done instanciating Export.");
         }
-        private void InitFunctions(WASMFile file)
+        private void InitFunctions(WebAssemblyFile file)
         {
             logger.Debug("Instanciating Functions.");
 
@@ -453,7 +453,7 @@ namespace WebAssemblyDotNET
                     return_type = type_info[index].return_type,
                 };
 
-                List<WASMType> locals_unwrapped = new List<WASMType>();
+                List<WebAssemblyType> locals_unwrapped = new List<WebAssemblyType>();
 
                 foreach (var local in body.locals)
                 {
@@ -468,63 +468,63 @@ namespace WebAssemblyDotNET
             logger.Debug("Done instanciating Functions.");
         }
 
-        public void Push(WASMActivationObject obj)
+        public void Push(ActivationObject obj)
         {
-            stack_objects.Push(WASMStackObjectType.ActivationObject);
+            stack_objects.Push(WebAssemblyStackObjectType.ActivationObject);
             callstack.Push(obj);
             logger.ConditionalTrace($"Pushed Activation Object: {obj}.");
         }
-        public void Push(WASMLabelObject obj)
+        public void Push(LabelObject obj)
         {
-            stack_objects.Push(WASMStackObjectType.LabelObject);
+            stack_objects.Push(WebAssemblyStackObjectType.LabelObject);
             labels.Push(obj);
             logger.ConditionalTrace($"Pushed Label: {obj}.");
         }
-        public void Push(WASMValueObject obj)
+        public void Push(ValueObject obj)
         {
-            stack_objects.Push(WASMStackObjectType.ValueObject);
+            stack_objects.Push(WebAssemblyStackObjectType.ValueObject);
             values.Push(obj);
             logger.ConditionalTrace($"Pushed Value: {obj}.");
         }
 
-        public WASMActivationObject GetCurrentFunction()
+        public ActivationObject GetCurrentFunction()
         {
             logger.ConditionalTrace($"Current function = {callstack.Peek()}.");
 
             return callstack.Peek();
         }
 
-        public WASMStackObjectType Peek()
+        public WebAssemblyStackObjectType Peek()
         {
-            if (stack_objects.Count == 0) return WASMStackObjectType.Empty;
+            if (stack_objects.Count == 0) return WebAssemblyStackObjectType.Empty;
             var ret = stack_objects.Peek();
             logger.ConditionalTrace($"Peeking {ret}.");
             return ret;
         }
-        public WASMActivationObject PopActivation()
+        public ActivationObject PopActivation()
         {
-            if (stack_objects.Pop() != WASMStackObjectType.ActivationObject) throw new Exception("Library error!");
+            if (stack_objects.Pop() != WebAssemblyStackObjectType.ActivationObject) throw new Exception("Library error!");
             var ret = callstack.Pop();
             logger.ConditionalTrace($"Popping Activation: {ret}.");
             return ret;
         }
-        public WASMLabelObject PopLabel()
+        public LabelObject PopLabel()
         {
-            if (stack_objects.Pop() != WASMStackObjectType.LabelObject) throw new Exception("Library error!");
+            if (stack_objects.Pop() != WebAssemblyStackObjectType.LabelObject) throw new Exception("Library error!");
             var ret = labels.Pop();
             logger.ConditionalTrace($"Popping Label: {ret}.");
             return ret;
         }
-        public WASMValueObject PopValue()
+        public ValueObject PopValue()
         {
-            if (stack_objects.Pop() != WASMStackObjectType.ValueObject) throw new Exception("Library error!");
+            if (stack_objects.Pop() != WebAssemblyStackObjectType.ValueObject) throw new Exception("Library error!");
             var ret = values.Pop();
             logger.ConditionalTrace($"Popping Value: {ret}.");
             return ret;
         }
     }
 
-    internal class WASMEnvironmentCalls
+    internal class WebAssemblyEnvironmentCalls
     {
         [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
         public static unsafe extern int puts(byte* str);
@@ -547,14 +547,28 @@ namespace WebAssemblyDotNET
     {
         private static Logger logger = LogManager.GetCurrentClassLogger();
 
-        public readonly WASMFile file;
+        public readonly WebAssemblyFile file;
+        private readonly WebAssemblyExecutionContext ctx;
 
-        public WebAssemblyInterpreter(WASMFile file)
+        public WebAssemblyInterpreter(WebAssemblyFile file)
         {
             this.file = file;
+
+            if (file.type == null) throw new Exception("No type information!");
+            if (file.function == null) throw new Exception("No type information!");
+            if (file.code == null) throw new Exception("No code to execute!");
+            if (file.start == null) throw new Exception("No start function!");
+
+            ctx = new WebAssemblyExecutionContext(file);
+
+            ResolveExternalFunctions();
+
+            uint start_func = file.start.index;
+            logger.Debug($"Start function index is {start_func}. This index does {(ctx.functions.ContainsKey(start_func) ? "" : "not")} exist.");
+            if (!ctx.functions.ContainsKey(start_func)) throw new Exception("Corrupt file.");  
         }
 
-        private void ResolveExternalFunctions(WebAssemblyExecutionContext ctx)
+        private void ResolveExternalFunctions()
         {
             logger.Debug("Begin Resolving External Functions.");
 
@@ -572,9 +586,9 @@ namespace WebAssemblyDotNET
                                 unsafe
                                 {
                                     fixed (byte* arr = ctx.linear_memory[0].memory)
-                                        WASMEnvironmentCalls.puts(arr + (int)args[0].value);
+                                        WebAssemblyEnvironmentCalls.puts(arr + (int)args[0].value);
                                 }
-                                ctx.Push(new WASMValueObject(0));
+                                ctx.Push(new ValueObject(0));
                             };
                             break;
                         default:
@@ -588,21 +602,8 @@ namespace WebAssemblyDotNET
 
         public int Run()
         {
-            if (file.type == null) throw new Exception("No type information!");
-            if (file.function == null) throw new Exception("No type information!");
-            if (file.code == null) throw new Exception("No code to execute!");
-            if (file.start == null) throw new Exception("No start function!");
-
-            WebAssemblyExecutionContext ctx = new WebAssemblyExecutionContext(file);
-
-            ResolveExternalFunctions(ctx);
-
-            uint start_func = file.start.index;
-            logger.Debug($"Start function index is {start_func}. This index does {(ctx.functions.ContainsKey(start_func)?"not" : "")} exist.");
-            if (!ctx.functions.ContainsKey(start_func)) throw new Exception("Corrupt file.");
-
             // Execute starting from the start_func
-            var result = Invoke(ctx, start_func);
+            var result = Invoke(file.start.index);
 
             logger.Debug($"Final result is {result}.");
 
@@ -610,37 +611,40 @@ namespace WebAssemblyDotNET
             // What about void? Is that valid or is it simply 0?
             switch (result.type)
             {
-                case WASMType.i32:
+                case WebAssemblyType.i32:
                     return (int)result.AsI32();
-                case WASMType.i64:
+                case WebAssemblyType.i64:
                     return (int)(long)result.AsI64();
                 default:
                     throw new Exception("Corrupt Return Value.");
             }
         }
 
-        private WASMValueObject GetValueOrFail(WebAssemblyExecutionContext ctx)
+        private ValueObject GetValueOrFail()
         {
-            if (ctx.Peek() != WASMStackObjectType.ValueObject)
+            if (ctx.Peek() != WebAssemblyStackObjectType.ValueObject)
             {
-                Trap(ctx, "Function stack corrupt.");
+                logger.Debug("Top of stack is not a value object!");
+                Trap("Function stack corrupt.");
             }
             return ctx.PopValue();
         }
 
-        private WASMValueObject GetValueOfTypeOrFail(WebAssemblyExecutionContext ctx, WASMType expected_type)
+        private ValueObject GetValueOfTypeOrFail(WebAssemblyType expected_type)
         {
-            WASMValueObject obj = GetValueOrFail(ctx);
+            ValueObject obj = GetValueOrFail();
 
             if(obj.type != expected_type)
             {
-                Trap(ctx, "Function stack corrupt.");
+                logger.Debug($"Expected type of {expected_type} but got {obj.type}.");
+
+                Trap("Function stack corrupt.");
             }
 
             return obj;
         }
 
-        private (byte[] memory, int location) LoadOrFail(WebAssemblyExecutionContext ctx, byte[] code, uint size, ref uint pc)
+        private (byte[] memory, int location) LoadOrFail(byte[] code, uint size, ref uint pc)
         {
             // align is in bytes
             // it tells us how this value is aligned
@@ -648,19 +652,21 @@ namespace WebAssemblyDotNET
             int align = 1 << (int)LEB128.ReadUInt32(code, ref pc);
             uint offset = LEB128.ReadUInt32(code, ref pc);
 
-            WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+            ValueObject i = GetValueOfTypeOrFail(WebAssemblyType.i32);
             long ea = i.AsI32() + offset;
             uint N = size/8;
 
             if ((ea + N) > ctx.linear_memory[0].size)
             {
-                Trap(ctx, "Illegal memory access");
+                Trap("Illegal memory access");
             }
+
+            logger.ConditionalTrace($"Memory location calculated = {ea}.");
 
             return (ctx.linear_memory[0].memory, (int)ea);
         }
 
-        private (WASMValueObject value, byte[] memory, int location) StoreOrFail(WebAssemblyExecutionContext ctx, byte[] code, uint size, WASMType type, ref uint pc)
+        private (ValueObject value, byte[] memory, int location) StoreOrFail(byte[] code, uint size, WebAssemblyType type, ref uint pc)
         {
             // align is in bytes
             // it tells us how this value is aligned
@@ -668,41 +674,45 @@ namespace WebAssemblyDotNET
             int align = 1 << (int)LEB128.ReadUInt32(code, ref pc);
             uint offset = LEB128.ReadUInt32(code, ref pc);
 
-            WASMValueObject c = GetValueOfTypeOrFail(ctx, type);
-            WASMValueObject i = GetValueOfTypeOrFail(ctx, WASMType.i32);
+            ValueObject c = GetValueOfTypeOrFail(type);
+            ValueObject i = GetValueOfTypeOrFail(WebAssemblyType.i32);
             long ea = i.AsI32() + offset;
             uint N = size / 8;
 
             if ((ea + N) > ctx.linear_memory[0].size)
             {
-                Trap(ctx, "Illegal memory access");
+                Trap("Illegal memory access");
             }
+
+            logger.ConditionalTrace($"Memory location calculated = {ea}.");
 
             return (c, ctx.linear_memory[0].memory, (int)ea);
         }
 
-        private void Enter(WebAssemblyExecutionContext ctx, WASMLabelObject obj)
+        private void Enter(LabelObject obj)
         {
             ctx.Push(obj);
         }
 
-        private void Exit(WebAssemblyExecutionContext ctx)
+        private void Exit()
         {
             // exit, no label required
         }
 
-        private void Exit(WebAssemblyExecutionContext ctx, uint l)
+        private void Exit(uint l)
         {
             if(ctx.labels.Count() < l + 1)
             {
-                Trap(ctx, "Function corrupt");
+                Trap("Function corrupt");
             }
 
             // Stack appears to consider ElementAt from the front of the list rather than the back
             // So paradoxically, it actually counts up (0th element = latest, 1st = second, etc)
-            WASMLabelObject label = ctx.labels.ElementAt((int)l);
+            LabelObject label = ctx.labels.ElementAt((int)l);
 
             uint n = label.arity;
+
+            logger.ConditionalTrace($"Exiting to label: {label}.");
 
             /*
                 Pop the values val^n from the stack.
@@ -714,22 +724,22 @@ namespace WebAssemblyDotNET
                 Push the values val^n to the stack.
              */
 
-            Stack<WASMValueObject> values = new Stack<WASMValueObject>();
+            Stack<ValueObject> values = new Stack<ValueObject>();
             for(uint i = 0; i < n; i++)
             {
-                values.Push(GetValueOrFail(ctx));
+                values.Push(GetValueOrFail());
             }
 
             for(uint i = 0; i < l+1; i++)
             {
-                while(ctx.Peek() == WASMStackObjectType.ValueObject)
+                while(ctx.Peek() == WebAssemblyStackObjectType.ValueObject)
                 {
                     ctx.PopValue();
                 }
 
-                if(ctx.Peek() != WASMStackObjectType.LabelObject)
+                if(ctx.Peek() != WebAssemblyStackObjectType.LabelObject)
                 {
-                    Trap(ctx, "Corrupt function");
+                    Trap("Corrupt function");
                 }
 
                 ctx.PopLabel();
@@ -740,54 +750,60 @@ namespace WebAssemblyDotNET
                 ctx.Push(values.Pop());
             }
 
+            logger.ConditionalTrace($"Jumping to {label.branch_target}.");
+
             ctx.GetCurrentFunction().pc = label.branch_target;
         }
 
-        private WASMValueObject Invoke(WebAssemblyExecutionContext ctx, uint func_id)
+        private ValueObject Invoke(uint func_id)
         {
+            logger.Debug($"Invoking {func_id}.");
+
             FunctionInstance func = ctx.functions[func_id];
-            WASMValueObject[] parameters = new WASMValueObject[func.parameters.Length];
+            ValueObject[] parameters = new ValueObject[func.parameters.Length];
 
             // Gather parameters from stack
             for (int i = 0; i < parameters.Length; i++)
             {
-                parameters[i] = GetValueOrFail(ctx);
+                parameters[i] = GetValueOrFail();
             }
 
             // Create our activation object and push on to the stack
-            WASMActivationObject activation_object = new WASMActivationObject(ctx.functions[func_id], parameters);
+            ActivationObject activation_object = new ActivationObject(ctx.functions[func_id], parameters);
             ctx.Push(activation_object);
 
             // If we're external, run host code
             if (!func.is_in_module)
             {
+                logger.Debug("Executing host code.");
                 func.host_code(activation_object.parameters);
             }
             else
             {
-                Execute(ctx);             
+                Execute();             
             }
 
-            WASMValueObject result = GetValueOrFail(ctx);
+            ValueObject result = GetValueOrFail();
 
             if(result.type != func.return_type)
             {
-                Trap(ctx, "Function corrupt.");
+                logger.Debug($"Result of function was {result.type}, expected {func.return_type}.");
+                Trap("Function corrupt.");
             }
 
             // Remember to pop our own activation instance off the record!
             // Double check as well that it is in fact us
-            if (ctx.Peek() != WASMStackObjectType.ActivationObject || activation_object != ctx.PopActivation())
+            if (ctx.Peek() != WebAssemblyStackObjectType.ActivationObject || activation_object != ctx.PopActivation())
             {
-                Trap(ctx, "Function stack corrupt.");
+                Trap("Function stack corrupt.");
             }
 
             return result;
         }
 
-        private void Trap(WebAssemblyExecutionContext ctx, string error)
+        private void Trap(string error)
         {
-            WASMActivationObject activation_object = ctx.GetCurrentFunction();
+            ActivationObject activation_object = ctx.GetCurrentFunction();
             FunctionInstance func = activation_object.function;
 
             throw new WebAssemblyTrap($"Trap occured at {func.module}.{func.name}@{activation_object.pc} with message: {error}");
@@ -797,14 +813,20 @@ namespace WebAssemblyDotNET
         // Each time a new "frame" is added, we just update activation_object and func
         // ctx records the current pc so when we go back
         // Simply need to inline the Invoke method into Execute
-        private void Execute(WebAssemblyExecutionContext ctx)
+        private void Execute()
         {
             try
             {
-                WASMActivationObject activation_object = ctx.GetCurrentFunction();
+                ActivationObject activation_object = ctx.GetCurrentFunction();
                 FunctionInstance func = activation_object.function;
                 byte[] code = func.code;
 
+                logger.Info($"Entering Execute with function {func.module}.{func.name}.");
+                logger.ConditionalTrace($"Function returns: {func.return_type}.");
+                logger.ConditionalTrace("Function parameters: {0}.", string.Join(", ", func.parameters.Select(x => x.ToString())));
+                logger.ConditionalTrace("Function arguments: {0}.", string.Join(", ", activation_object.parameters.Select(x => x.ToString())));
+                logger.ConditionalTrace("Function locals: {0}.", string.Join(", ", func.locals.Select(x => x.ToString())));
+                
                 //WebAssemblyHelper.ReinterpretHelper reinterpret_helper = new WebAssemblyHelper.ReinterpretHelper();
 
                 bool continue_executing = true;
@@ -812,247 +834,297 @@ namespace WebAssemblyDotNET
                 // https://webassembly.github.io/spec/core/exec/instructions.html
                 while (continue_executing)
                 {
-                    switch ((WASMOpcodes)code[activation_object.pc])
+                    logger.ConditionalTrace($"PC = {activation_object.pc}.");
+                    logger.Debug($"Executing: {(WebAssemblyOpcode)code[activation_object.pc]}.");
+
+                    switch ((WebAssemblyOpcode)code[activation_object.pc])
                     {
-                        case WASMOpcodes.UNREACHABLE:
-                            Trap(ctx, "Unreachable reached!");
-                            break;
-                        case WASMOpcodes.NOP:
-                            break;
-                        case WASMOpcodes.END:
-                            continue_executing = false;
-                            break;
-                        case WASMOpcodes.LOOP:
+                        case WebAssemblyOpcode.UNREACHABLE:
+                            {
+                                Trap("Unreachable reached!");
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.NOP:
+                            {
+                                break;
+                            }
+                        case WebAssemblyOpcode.END:
+                            {
+                                continue_executing = false;
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.LOOP:
                             {
                                 // ignore result for now
                                 activation_object.pc++;
-                                var result = (WASMType)code[activation_object.pc];
+                                var result = (WebAssemblyType)code[activation_object.pc];
 
-                                Enter(ctx, new WASMLabelObject(0, activation_object.pc-2));
+                                Enter(new LabelObject(0, activation_object.pc-2));
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.BR:
+                        case WebAssemblyOpcode.BR:
                             { 
                                 uint l = LEB128.ReadUInt32(code, ref activation_object.pc);
 
-                                Exit(ctx, l);
+                                Exit(l);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.BR_IF:
+                        case WebAssemblyOpcode.BR_IF:
                             {
-                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                ValueObject c = GetValueOfTypeOrFail(WebAssemblyType.i32);
                                 if(c.AsI32() != 0)
                                 {
-                                    goto case WASMOpcodes.BR;
+                                    goto case WebAssemblyOpcode.BR;
                                 }
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.LOCAL_GET:
+                        case WebAssemblyOpcode.LOCAL_GET:
                             {
                                 uint local = LEB128.ReadUInt32(code, ref activation_object.pc);
-                                if (local > func.locals.Length) Trap(ctx, "Function corrupt.");
+                                if (local > func.locals.Length) Trap("Function corrupt.");
 
                                 ctx.Push(activation_object.locals[local]);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.LOCAL_SET:
+                        case WebAssemblyOpcode.LOCAL_SET:
                             {
                                 uint local = LEB128.ReadUInt32(code, ref activation_object.pc);
-                                if (local > func.locals.Length) Trap(ctx, "Function corrupt.");
+                                if (local > func.locals.Length) Trap("Function corrupt.");
 
-                                WASMValueObject val = GetValueOrFail(ctx);
+                                ValueObject val = GetValueOrFail();
 
                                 activation_object.locals[local] = val;
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.LOCAL_TEE:
+                        case WebAssemblyOpcode.LOCAL_TEE:
                             {
-                                WASMValueObject val = GetValueOrFail(ctx);
+                                ValueObject val = GetValueOrFail();
                                 ctx.Push(val);
                                 ctx.Push(val);
+                                goto case WebAssemblyOpcode.LOCAL_SET;
                             }
-                            goto case WASMOpcodes.LOCAL_SET;
-                        case WASMOpcodes.I32_CONST:
-                            ctx.Push(new WASMValueObject(LEB128.ReadUInt32(code, ref activation_object.pc)));
-                            break;
-                        case WASMOpcodes.I64_CONST:
-                            ctx.Push(new WASMValueObject(LEB128.ReadUInt64(code, ref activation_object.pc)));
-                            break;
-                        case WASMOpcodes.F32_CONST:
-                            ctx.Push(new WASMValueObject(BitConverter.ToSingle(code, (int)activation_object.pc+1)));
-                            activation_object.pc += 4;
-                            break;
-                        case WASMOpcodes.F64_CONST:
-                            ctx.Push(new WASMValueObject(BitConverter.ToDouble(code, (int)activation_object.pc+1)));
-                            activation_object.pc += 7;
-                            break;
-                        case WASMOpcodes.I32_LOAD:
+                        case WebAssemblyOpcode.I32_CONST:
                             {
-                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
+                                ctx.Push(new ValueObject(LEB128.ReadUInt32(code, ref activation_object.pc)));
+                                break;
+                            }
+                        case WebAssemblyOpcode.I64_CONST:
+                            {
+                                ctx.Push(new ValueObject(LEB128.ReadUInt64(code, ref activation_object.pc)));
+                                break;
+                            }
+                        case WebAssemblyOpcode.F32_CONST:
+                            {
+                                ctx.Push(new ValueObject(BitConverter.ToSingle(code, (int)activation_object.pc + 1)));
+                                activation_object.pc += 4;
+                                break;
+                            }
+                        case WebAssemblyOpcode.F64_CONST:
+                            {
+                                ctx.Push(new ValueObject(BitConverter.ToDouble(code, (int)activation_object.pc + 1)));
+                                activation_object.pc += 7;
+                                break;
+                            }
+                        case WebAssemblyOpcode.I32_LOAD:
+                            {
+                                var (memory, location) = LoadOrFail(code, 32, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject(BitConverter.ToUInt32(memory, location)));
-                            }
-                            break;
-                        case WASMOpcodes.I64_LOAD:
-                            {
-                                var (memory, location) = LoadOrFail(ctx, code, 64, ref activation_object.pc);
+                                ctx.Push(new ValueObject(BitConverter.ToUInt32(memory, location)));
 
-                                ctx.Push(new WASMValueObject(BitConverter.ToUInt64(memory, location)));
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.F32_LOAD:
+                        case WebAssemblyOpcode.I64_LOAD:
                             {
-                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
+                                var (memory, location) = LoadOrFail(code, 64, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject(BitConverter.ToSingle(memory, location)));
-                            }
-                            break;
-                        case WASMOpcodes.F64_LOAD:
-                            {
-                                var (memory, location) = LoadOrFail(ctx, code, 64, ref activation_object.pc);
+                                ctx.Push(new ValueObject(BitConverter.ToUInt64(memory, location)));
 
-                                ctx.Push(new WASMValueObject(BitConverter.ToDouble(memory, location)));
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I32_LOAD8_S:
+                        case WebAssemblyOpcode.F32_LOAD:
                             {
-                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
+                                var (memory, location) = LoadOrFail(code, 32, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject((uint)(sbyte)memory[location]));
-                            }
-                            break;
-                        case WASMOpcodes.I32_LOAD8_U:
-                            {
-                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
+                                ctx.Push(new ValueObject(BitConverter.ToSingle(memory, location)));
 
-                                ctx.Push(new WASMValueObject((uint)memory[location]));
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I32_LOAD16_S:
+                        case WebAssemblyOpcode.F64_LOAD:
                             {
-                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+                                var (memory, location) = LoadOrFail(code, 64, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject((uint)BitConverter.ToInt16(memory, (int)activation_object.pc)));
-                            }
-                            break;
-                        case WASMOpcodes.I32_LOAD16_U:
-                            {
-                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+                                ctx.Push(new ValueObject(BitConverter.ToDouble(memory, location)));
 
-                                ctx.Push(new WASMValueObject(BitConverter.ToUInt16(memory, (int)activation_object.pc)));
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I64_LOAD8_S:
+                        case WebAssemblyOpcode.I32_LOAD8_S:
                             {
-                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
+                                var (memory, location) = LoadOrFail(code, 8, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject((ulong)(sbyte)memory[location]));
-                            }
-                            break;
-                        case WASMOpcodes.I64_LOAD8_U:
-                            {
-                                var (memory, location) = LoadOrFail(ctx, code, 8, ref activation_object.pc);
+                                ctx.Push(new ValueObject((uint)(sbyte)memory[location]));
 
-                                ctx.Push(new WASMValueObject((ulong)memory[location]));
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I64_LOAD16_S:
+                        case WebAssemblyOpcode.I32_LOAD8_U:
                             {
-                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+                                var (memory, location) = LoadOrFail(code, 8, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject((ulong)BitConverter.ToInt16(memory, (int)activation_object.pc)));
-                            }
-                            break;
-                        case WASMOpcodes.I64_LOAD16_U:
-                            {
-                                var (memory, location) = LoadOrFail(ctx, code, 16, ref activation_object.pc);
+                                ctx.Push(new ValueObject((uint)memory[location]));
 
-                                ctx.Push(new WASMValueObject((ulong)BitConverter.ToUInt16(memory, (int)activation_object.pc)));
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I64_LOAD32_S:
+                        case WebAssemblyOpcode.I32_LOAD16_S:
                             {
-                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
+                                var (memory, location) = LoadOrFail(code, 16, ref activation_object.pc);
 
-                                ctx.Push(new WASMValueObject((ulong)BitConverter.ToInt32(memory, (int)activation_object.pc)));
-                            }
-                            break;
-                        case WASMOpcodes.I64_LOAD32_U:
-                            {
-                                var (memory, location) = LoadOrFail(ctx, code, 32, ref activation_object.pc);
+                                ctx.Push(new ValueObject((uint)BitConverter.ToInt16(memory, (int)activation_object.pc)));
 
-                                ctx.Push(new WASMValueObject((ulong)BitConverter.ToUInt32(memory, (int)activation_object.pc)));
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I32_STORE:
+                        case WebAssemblyOpcode.I32_LOAD16_U:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.i32, ref activation_object.pc);
+                                var (memory, location) = LoadOrFail(code, 16, ref activation_object.pc);
+
+                                ctx.Push(new ValueObject(BitConverter.ToUInt16(memory, (int)activation_object.pc)));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.I64_LOAD8_S:
+                            {
+                                var (memory, location) = LoadOrFail(code, 8, ref activation_object.pc);
+
+                                ctx.Push(new ValueObject((ulong)(sbyte)memory[location]));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.I64_LOAD8_U:
+                            {
+                                var (memory, location) = LoadOrFail(code, 8, ref activation_object.pc);
+
+                                ctx.Push(new ValueObject((ulong)memory[location]));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.I64_LOAD16_S:
+                            {
+                                var (memory, location) = LoadOrFail(code, 16, ref activation_object.pc);
+
+                                ctx.Push(new ValueObject((ulong)BitConverter.ToInt16(memory, (int)activation_object.pc)));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.I64_LOAD16_U:
+                            {
+                                var (memory, location) = LoadOrFail(code, 16, ref activation_object.pc);
+
+                                ctx.Push(new ValueObject((ulong)BitConverter.ToUInt16(memory, (int)activation_object.pc)));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.I64_LOAD32_S:
+                            {
+                                var (memory, location) = LoadOrFail(code, 32, ref activation_object.pc);
+
+                                ctx.Push(new ValueObject((ulong)BitConverter.ToInt32(memory, (int)activation_object.pc)));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.I64_LOAD32_U:
+                            {
+                                var (memory, location) = LoadOrFail(code, 32, ref activation_object.pc);
+
+                                ctx.Push(new ValueObject((ulong)BitConverter.ToUInt32(memory, (int)activation_object.pc)));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.I32_STORE:
+                            {
+                                var (value, memory, location) = StoreOrFail(code, 32, WebAssemblyType.i32, ref activation_object.pc);
 
                                 Array.Copy(BitConverter.GetBytes(value.AsI32()), 0, memory, location, 32/8);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I64_STORE:
+                        case WebAssemblyOpcode.I64_STORE:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 64, WebAssemblyType.i64, ref activation_object.pc);
 
                                 Array.Copy(BitConverter.GetBytes(value.AsI64()), 0, memory, location, 64/8);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.F32_STORE:
+                        case WebAssemblyOpcode.F32_STORE:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.f32, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 32, WebAssemblyType.f32, ref activation_object.pc);
 
                                 Array.Copy(BitConverter.GetBytes(value.AsF32()), 0, memory, location, 32/8);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.F64_STORE:
+                        case WebAssemblyOpcode.F64_STORE:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.f64, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 64, WebAssemblyType.f64, ref activation_object.pc);
 
                                 Array.Copy(BitConverter.GetBytes(value.AsF64()), 0, memory, location, 64/8);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I32_STORE8:
+                        case WebAssemblyOpcode.I32_STORE8:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.i32, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 32, WebAssemblyType.i32, ref activation_object.pc);
 
                                 memory[location] = (byte)value.AsI32();
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I32_STORE16:
+                        case WebAssemblyOpcode.I32_STORE16:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 32, WASMType.i32, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 32, WebAssemblyType.i32, ref activation_object.pc);
 
                                 Array.Copy(BitConverter.GetBytes((ushort)value.AsI32()), 0, memory, location, 16/8);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I64_STORE8:
+                        case WebAssemblyOpcode.I64_STORE8:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 64, WebAssemblyType.i64, ref activation_object.pc);
 
                                 memory[location] = (byte)value.AsI64();
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I64_STORE16:
+                        case WebAssemblyOpcode.I64_STORE16:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 64, WebAssemblyType.i64, ref activation_object.pc);
 
                                 Array.Copy(BitConverter.GetBytes((ushort)value.AsI64()), 0, memory, location, 16/8);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.I64_STORE32:
+                        case WebAssemblyOpcode.I64_STORE32:
                             {
-                                var (value, memory, location) = StoreOrFail(ctx, code, 64, WASMType.i64, ref activation_object.pc);
+                                var (value, memory, location) = StoreOrFail(code, 64, WebAssemblyType.i64, ref activation_object.pc);
 
                                 Array.Copy(BitConverter.GetBytes((uint)value.AsI64()), 0, memory, location, 32/8);
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.MEMORY_SIZE:
-                            ctx.Push(new WASMValueObject((uint)ctx.linear_memory[0].pages));
-                            break;
-                        case WASMOpcodes.MEMORY_GROW:
+                        case WebAssemblyOpcode.MEMORY_SIZE:
                             {
-                                WASMValueObject n = GetValueOfTypeOrFail(ctx, WASMType.i32);
+                                ctx.Push(new ValueObject((uint)ctx.linear_memory[0].pages));
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.MEMORY_GROW:
+                            {
+                                ValueObject n = GetValueOfTypeOrFail(WebAssemblyType.i32);
 
                                 if (ctx.linear_memory[0].GrowMemory(n.AsI32()))
                                 {
@@ -1060,32 +1132,41 @@ namespace WebAssemblyDotNET
                                 }
                                 else
                                 {
-                                    ctx.Push(new WASMValueObject(unchecked((uint)-1)));
+                                    ctx.Push(new ValueObject(unchecked((uint)-1)));
                                 }
-                            }
-                            break;
-                        case WASMOpcodes.CALL:
+
+                                break;
+                            } 
+                        case WebAssemblyOpcode.CALL:
                             {
                                 uint new_func = LEB128.ReadUInt32(code, ref activation_object.pc);
 
-                                ctx.Push(Invoke(ctx, new_func));
+                                ctx.Push(Invoke(new_func));
+
+                                break;
                             }
-                            break;
-                        case WASMOpcodes.DROP:
-                            GetValueOrFail(ctx);
-                            break;
-                        case WASMOpcodes.SELECT:
+                        case WebAssemblyOpcode.DROP:
                             {
-                                WASMValueObject c = GetValueOfTypeOrFail(ctx, WASMType.i32);
-                                WASMValueObject val2 = GetValueOrFail(ctx);
-                                WASMValueObject val1 = GetValueOrFail(ctx);
+                                GetValueOrFail();
+
+                                break;
+                            }
+                        case WebAssemblyOpcode.SELECT:
+                            {
+                                ValueObject c = GetValueOfTypeOrFail(WebAssemblyType.i32);
+                                ValueObject val2 = GetValueOrFail();
+                                ValueObject val1 = GetValueOrFail();
 
                                 ctx.Push(c.AsI32() != 0 ? val1 : val2);
+
+                                break;
                             }
-                            break;
                         default:
-                            Trap(ctx, $"Unknown Opcode {code[activation_object.pc]}.");
-                            break;
+                            {
+                                Trap($"Unknown Opcode {code[activation_object.pc]}.");
+
+                                break;
+                            }
                     }
                     activation_object.pc++;
                 }
@@ -1096,7 +1177,9 @@ namespace WebAssemblyDotNET
             }
             catch(Exception ex)
             {
-                Trap(ctx, "Unexpected Error: " + ex.Message);
+                logger.Debug(ex.StackTrace);
+
+                Trap("Unexpected Error: " + ex.Message);
             }
         }
     }

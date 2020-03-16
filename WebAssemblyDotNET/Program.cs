@@ -162,8 +162,8 @@ namespace WebAssemblyCS
                 sb.AppendLine("\t-v/--version\t\tPrints product version.");
                 sb.AppendLine("\t-d/--debug\t\tPrints debug information.");
                 sb.AppendLine("\t-s/--strict\t\tStrict parsing and execution.");
-                sb.AppendLine("\t-e/--execute\t\tExecute the WASM file based on the start section.");
-                sb.AppendLine("\t-r/--run [id]\t\tExecutes the WASM function [id].");
+                sb.AppendLine("\t-e/--execute\t\tExecute the WebAssembly file based on the start section.");
+                sb.AppendLine("\t-r/--run [id]\t\tExecutes the WebAssembly function [id].");
             }
 
             return sb.ToString();
@@ -202,7 +202,7 @@ namespace WebAssemblyCS
 
             try
             {
-                WASMFile file = new WASMFile();
+                WebAssemblyFile file = new WebAssemblyFile();
 
                 file.Parse(options.Filenames[0], options.Strict);
 
