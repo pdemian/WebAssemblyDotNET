@@ -39,6 +39,11 @@ namespace WebAssemblyDotNET
             return (byte)(unchecked(((result + (result >> 4)) & 0x0F0F0F0FU) * 0x01010101U) >> 24);
         }
 
+        internal static string ToString<T>(T[] array, string seperator = " ")
+        {
+            return string.Join(seperator, array);
+        }
+
         internal static bool IsValueType(WebAssemblyType type)
         {
             switch (type)

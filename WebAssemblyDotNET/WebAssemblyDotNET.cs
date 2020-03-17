@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using NLog;
 
 namespace WebAssemblyDotNET
 {
@@ -227,8 +228,16 @@ namespace WebAssemblyDotNET
 
     public abstract class WebAssemblyComponent
     {
+        private readonly Logger logger;
+
+        public WebAssemblyComponent()
+        {
+            logger = LogManager.GetLogger(GetType().Name);
+        }
+
         public abstract void Save(BinaryWriter writer);
         public abstract uint SizeOf();
+        public abstract override string ToString();
     }
 
     public abstract class WebAssemblySection : WebAssemblyComponent

@@ -182,5 +182,27 @@ namespace WebAssemblyDotNET
                    code?.SizeOf() ?? 0 +
                    data?.SizeOf() ?? 0;
         }
+
+        public override string ToString()
+        {
+            StringBuilder sb = new StringBuilder();
+
+            sb.AppendFormat("({0} ", GetType().Name);
+            if (custom != null) sb.AppendFormat("{0} ", custom);
+            if (type != null) sb.AppendFormat("{0} ", type);
+            if (import != null) sb.AppendFormat("{0} ", import);
+            if (function != null) sb.AppendFormat("{0} ", function);
+            if (table != null) sb.AppendFormat("{0} ", table);
+            if (memory != null) sb.AppendFormat("{0} ", memory);
+            if (global != null) sb.AppendFormat("{0} ", global);
+            if (export != null) sb.AppendFormat("{0} ", export);
+            if (start != null) sb.AppendFormat("{0} ", start);
+            if (element != null) sb.AppendFormat("{0} ", element);
+            if (code != null) sb.AppendFormat("{0} ", code);
+            if (data != null) sb.AppendFormat("{0} ", data);
+            sb.Append(')');
+
+            return sb.ToString();
+        }
     }
 }

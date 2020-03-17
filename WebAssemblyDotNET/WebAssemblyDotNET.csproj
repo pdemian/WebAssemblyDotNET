@@ -53,15 +53,40 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Components\DataSegment.cs" />
+    <Compile Include="Components\ElementSegment.cs" />
+    <Compile Include="Components\ExportEntry.cs" />
+    <Compile Include="Components\FunctionBody.cs" />
+    <Compile Include="Components\FuncType.cs" />
+    <Compile Include="Components\GlobalType.cs" />
+    <Compile Include="Components\GlobalVariable.cs" />
+    <Compile Include="Components\ImportEntry.cs" />
+    <Compile Include="Components\InitExpr.cs" />
+    <Compile Include="Components\LocalEntry.cs" />
+    <Compile Include="Components\MemoryType.cs" />
+    <Compile Include="Components\ResizeLimit.cs" />
+    <Compile Include="Components\TableType.cs" />
     <Compile Include="LEB128.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Sections\CodeSection.cs" />
+    <Compile Include="Sections\CustomSection.cs" />
+    <Compile Include="Sections\DataSection.cs" />
+    <Compile Include="Sections\ElementSection.cs" />
+    <Compile Include="Sections\ExportSection.cs" />
+    <Compile Include="Sections\FunctionSection.cs" />
+    <Compile Include="Sections\GlobalSection.cs" />
+    <Compile Include="Sections\ImportSection.cs" />
+    <Compile Include="Sections\MemorySection.cs" />
+    <Compile Include="Sections\StartSection.cs" />
+    <Compile Include="Sections\TableSection.cs" />
+    <Compile Include="Sections\TypeSection.cs" />
     <Compile Include="WebAssemblyFile.cs" />
-    <Compile Include="WebAssemblyComponents.cs" />
     <Compile Include="WebAssemblyDotNET.cs" />
-    <Compile Include="WebAssemblyDotNETHelpers.cs" />
-    <Compile Include="WebAssemblyExecutionEngine.cs" />
-    <Compile Include="WebAssemblySections.cs" />
+    <Compile Include="Helpers\WebAssemblyDotNETHelper.cs" />
+    <Compile Include="WebAssemblyInterpreter.cs" />
+    <Compile Include="Helpers\WebAssemblyInterpreterHelper.cs" />
+    <Compile Include="WebAssemblyTrap.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
