@@ -2,6 +2,7 @@
 using System.Linq;
 using System.IO;
 using WebAssemblyDotNET.Components;
+using System.Diagnostics.CodeAnalysis;
 
 namespace WebAssemblyDotNET
 {
@@ -12,6 +13,7 @@ namespace WebAssemblyDotNET
         {
             public readonly FunctionBody[] bodies;
 
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
             public CodeSection(FunctionBody[] bodies) : base(WebAssemblyModuleID.Code)
             {
                 this.bodies = bodies ?? throw new ArgumentException(nameof(bodies));

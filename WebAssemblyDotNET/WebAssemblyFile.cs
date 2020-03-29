@@ -36,132 +36,132 @@ namespace WebAssemblyDotNET
 
             using (FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read))
             {
-                using (BinaryReader reader = new BinaryReader(fs))
+                BinaryReader reader = new BinaryReader(fs);
+                try
                 {
-                    try
+                    uint magic = reader.ReadUInt32();
+                    if (magic != MAGIC) throw new Exception("Not a compiled Web Assembly file.");
+
+                    uint version = reader.ReadUInt32();
+                    if (version > SUPPORTED_VERSION) throw new Exception($"Unsupported version. Expected version <= {SUPPORTED_VERSION}, received {version}.");
+
+                    int last_parsed_module = int.MinValue;
+
+                    /* Read in each module */
+
+                    while (true)
                     {
-                        uint magic = reader.ReadUInt32();
-                        if (magic != MAGIC) throw new Exception("Not a compiled Web Assembly file.");
+                        int id = reader.PeekChar();
 
-                        uint version = reader.ReadUInt32();
-                        if (version > SUPPORTED_VERSION) throw new Exception($"Unsupported version. Expected version <= {SUPPORTED_VERSION}, received {version}.");
+                        // EOF
+                        if (id == -1) break;
 
-                        int last_parsed_module = int.MinValue;
+                        if (strict_parse && id < last_parsed_module) throw new Exception("File contains out of order sections.");
+                        last_parsed_module = id;
 
-                        /* Read in each module */
-
-                        while (true)
+                        switch (id)
                         {
-                            int id = reader.PeekChar();
+                            case (int)WebAssemblyModuleID.Custom:
+                                if (strict_parse && custom != null) throw new Exception("File contains a duplicate custom section.");
+                                custom = new CustomSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Type:
+                                if (strict_parse && type != null) throw new Exception("File contains a duplicate type section.");
+                                type = new TypeSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Import:
+                                if (strict_parse && import != null) throw new Exception("File contains a duplicate import section.");
+                                import = new ImportSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Function:
+                                if (strict_parse && function != null) throw new Exception("File contains a duplicate function section.");
+                                function = new FunctionSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Table:
+                                if (strict_parse && table != null) throw new Exception("File contains a duplicate table section.");
+                                table = new TableSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Memory:
+                                if (strict_parse && memory != null) throw new Exception("File contains a duplicate memory section.");
+                                memory = new MemorySection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Global:
+                                if (strict_parse && global != null) throw new Exception("File contains a duplicate global section.");
+                                global = new GlobalSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Export:
+                                if (strict_parse && export != null) throw new Exception("File contains a duplicate export section.");
+                                export = new ExportSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Start:
+                                if (strict_parse && start != null) throw new Exception("File contains a duplicate start section.");
+                                start = new StartSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Element:
+                                if (strict_parse && element != null) throw new Exception("File contains a duplicate element section.");
+                                element = new ElementSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Code:
+                                if (strict_parse && code != null) throw new Exception("File contains a duplicate code section.");
+                                code = new CodeSection(reader);
+                                break;
+                            case (int)WebAssemblyModuleID.Data:
+                                if (strict_parse && data != null) throw new Exception("File contains a duplicate data section.");
+                                data = new DataSection(reader);
+                                break;
 
-                            // EOF
-                            if (id == -1) break;
-
-                            if (strict_parse && id < last_parsed_module) throw new Exception("File contains out of order sections.");
-                            last_parsed_module = id;
-
-                            switch (id)
-                            {
-                                case (int)WebAssemblyModuleID.Custom:
-                                    if (strict_parse && custom != null) throw new Exception("File contains a duplicate custom section.");
-                                    custom = new CustomSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Type:
-                                    if (strict_parse && type != null) throw new Exception("File contains a duplicate type section.");
-                                    type = new TypeSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Import:
-                                    if (strict_parse && import != null) throw new Exception("File contains a duplicate import section.");
-                                    import = new ImportSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Function:
-                                    if (strict_parse && function != null) throw new Exception("File contains a duplicate function section.");
-                                    function = new FunctionSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Table:
-                                    if (strict_parse && table != null) throw new Exception("File contains a duplicate table section.");
-                                    table = new TableSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Memory:
-                                    if (strict_parse && memory != null) throw new Exception("File contains a duplicate memory section.");
-                                    memory = new MemorySection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Global:
-                                    if (strict_parse && global != null) throw new Exception("File contains a duplicate global section.");
-                                    global = new GlobalSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Export:
-                                    if (strict_parse && export != null) throw new Exception("File contains a duplicate export section.");
-                                    export = new ExportSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Start:
-                                    if (strict_parse && start != null) throw new Exception("File contains a duplicate start section.");
-                                    start = new StartSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Element:
-                                    if (strict_parse && element != null) throw new Exception("File contains a duplicate element section.");
-                                    element = new ElementSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Code:
-                                    if (strict_parse && code != null) throw new Exception("File contains a duplicate code section.");
-                                    code = new CodeSection(reader);
-                                    break;
-                                case (int)WebAssemblyModuleID.Data:
-                                    if (strict_parse && data != null) throw new Exception("File contains a duplicate data section.");
-                                    data = new DataSection(reader);
-                                    break;
-
-                                // Error
-                                default:
-                                    throw new Exception($"Unknown section {id}.");
-                            }
+                            // Error
+                            default:
+                                throw new Exception($"Unknown section {id}.");
                         }
-
-                        /* Additional validation */
-
-                        // The lengths of vectors produced by the (possibly empty) function and code section must match up.
-                        if ((function != null && code == null) || (function == null && code != null)) throw new Exception("File corrupt. Must include both function and code sections.");
-                        if (function.types.Length != code.bodies.Length) throw new Exception("File corrupt. Function and code sections do not match up.");
-
-                        // TODO: I don't actually check if data overlaps
-
-                        // TODO: Validate everything in this list
-                        // https://webassembly.github.io/spec/core/valid/modules.html
                     }
-                    catch (Exception)
-                    {
-                        // for (var b = fs.ReadByte(); b != -1; b = fs.ReadByte())
-                        // {
-                        //     Console.Write(" 0x" + b.ToString("X"));
-                        // }
-                        throw;
-                    }
+
+                    /* Additional validation */
+
+                    // The lengths of vectors produced by the (possibly empty) function and code section must match up.
+                    if ((function != null && code == null) || (function == null && code != null)) throw new Exception("File corrupt. Must include both function and code sections.");
+                    if (function.types.Length != code.bodies.Length) throw new Exception("File corrupt. Function and code sections do not match up.");
+
+                    // TODO: I don't actually check if data overlaps
+
+                    // TODO: Validate everything in this list
+                    // https://webassembly.github.io/spec/core/valid/modules.html
+                }
+                catch (Exception)
+                {
+                    // for (var b = fs.ReadByte(); b != -1; b = fs.ReadByte())
+                    // {
+                    //     Console.Write(" 0x" + b.ToString("X"));
+                    // }
+                    throw;
                 }
             }
+        }
+
+        public void Save(BinaryWriter writer)
+        {
+            writer.Write(MAGIC);
+            writer.Write(SUPPORTED_VERSION);
+
+            custom?.Save(writer);
+            type?.Save(writer);
+            import?.Save(writer);
+            function?.Save(writer);
+            table?.Save(writer);
+            memory?.Save(writer);
+            global?.Save(writer);
+            export?.Save(writer);
+            start?.Save(writer);
+            element?.Save(writer);
+            code?.Save(writer);
+            data?.Save(writer);
         }
 
         public void Save(string filename)
         {
             using (FileStream fs = new FileStream(filename, FileMode.Create, FileAccess.Write))
             {
-                using (BinaryWriter writer = new BinaryWriter(fs))
-                {
-                    writer.Write(MAGIC);
-                    writer.Write(SUPPORTED_VERSION);
-
-                    custom?.Save(writer);
-                    type?.Save(writer);
-                    import?.Save(writer);
-                    function?.Save(writer);
-                    table?.Save(writer);
-                    memory?.Save(writer);
-                    global?.Save(writer);
-                    export?.Save(writer);
-                    start?.Save(writer);
-                    element?.Save(writer);
-                    code?.Save(writer);
-                    data?.Save(writer);
-                }
+                Save(new BinaryWriter(fs));
             }
         }
 

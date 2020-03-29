@@ -2,6 +2,7 @@
 using System.Linq;
 using System.IO;
 using WebAssemblyDotNET.Components;
+using System.Diagnostics.CodeAnalysis;
 
 namespace WebAssemblyDotNET
 {
@@ -12,6 +13,7 @@ namespace WebAssemblyDotNET
         {
             public readonly ImportEntry[] entries;
 
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
             public ImportSection(ImportEntry[] entries) : base(WebAssemblyModuleID.Import)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));

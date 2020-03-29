@@ -48,7 +48,7 @@ namespace WebAssemblyDotNET
                                 unsafe
                                 {
                                     fixed (byte* arr = ctx.linear_memory[0].memory)
-                                        WebAssemblyEnvironmentCalls.puts(arr + (int)args[0].value);
+                                        WebAssemblyUnsafeNativeMethods.puts(arr + (int)args[0].value);
                                 }
                                 ctx.Push(new ValueObject(0));
                             };
@@ -285,9 +285,9 @@ namespace WebAssemblyDotNET
 
                 logger.Info($"Entering Execute with function {func.module}.{func.name}.");
                 logger.ConditionalTrace($"Function returns: {func.return_type}.");
-                logger.ConditionalTrace("Function parameters: {0}.", string.Join(", ", func.parameters.Select(x => x.ToString())));
-                logger.ConditionalTrace("Function arguments: {0}.", string.Join(", ", activation_object.parameters.Select(x => x.ToString())));
-                logger.ConditionalTrace("Function locals: {0}.", string.Join(", ", func.locals.Select(x => x.ToString())));
+                logger.ConditionalTrace("Function parameters: {0}.", WebAssemblyHelper.ToString(func.parameters, ", "));
+                logger.ConditionalTrace("Function arguments: {0}.", WebAssemblyHelper.ToString(activation_object.parameters, ", "));
+                logger.ConditionalTrace("Function locals: {0}.", WebAssemblyHelper.ToString(func.locals, ", "));
                 
                 //WebAssemblyHelper.ReinterpretHelper reinterpret_helper = new WebAssemblyHelper.ReinterpretHelper();
 

@@ -41,7 +41,7 @@ namespace WebAssemblyDotNET
 
         internal static string ToString<T>(T[] array, string seperator = " ")
         {
-            return string.Join(seperator, array);
+            return array == null ? "null" : string.Join(seperator, array);
         }
 
         internal static bool IsValueType(WebAssemblyType type)

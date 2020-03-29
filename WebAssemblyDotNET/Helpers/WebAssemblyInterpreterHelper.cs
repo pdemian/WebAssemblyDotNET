@@ -613,7 +613,7 @@ namespace WebAssemblyDotNET
         }
     }
 
-    internal class WebAssemblyEnvironmentCalls
+    internal class WebAssemblyUnsafeNativeMethods
     {
         [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
         public static unsafe extern int puts(byte* str);

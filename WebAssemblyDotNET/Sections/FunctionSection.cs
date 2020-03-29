@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.IO;
+using System.Diagnostics.CodeAnalysis;
 
 namespace WebAssemblyDotNET
 {
@@ -11,6 +12,7 @@ namespace WebAssemblyDotNET
         {
             public readonly uint[] types;
 
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
             public FunctionSection(uint[] types) : base(WebAssemblyModuleID.Function)
             {
                 this.types = types ?? throw new ArgumentException(nameof(types));

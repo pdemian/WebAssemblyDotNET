@@ -2,16 +2,19 @@
 using System.Linq;
 using System.IO;
 using WebAssemblyDotNET.Components;
+using System.Diagnostics.CodeAnalysis;
 
 namespace WebAssemblyDotNET
 {
     namespace Sections
     {
         // https://webassembly.github.io/spec/core/binary/modules.html#data-section
+        
         public class DataSection : WebAssemblySection
         {
             public readonly DataSegment[] entries;
 
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
             public DataSection(DataSegment[] entries) : base(WebAssemblyModuleID.Data)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace WebAssemblyDotNET
 {
+    [Serializable]
     public class WebAssemblyTrap : Exception
     {
         public WebAssemblyTrap(string message) : base(message)

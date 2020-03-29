@@ -2,6 +2,7 @@
 using System.Linq;
 using System.IO;
 using WebAssemblyDotNET.Components;
+using System.Diagnostics.CodeAnalysis;
 
 namespace WebAssemblyDotNET
 {
@@ -12,6 +13,7 @@ namespace WebAssemblyDotNET
         {
             public readonly GlobalVariable[] globals;
 
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
             public GlobalSection(GlobalVariable[] globals) : base(WebAssemblyModuleID.Global)
             {
                 this.globals = globals ?? throw new ArgumentException(nameof(globals));
