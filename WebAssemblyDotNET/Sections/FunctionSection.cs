@@ -34,6 +34,7 @@ namespace WebAssemblyDotNET
             public override void Save(BinaryWriter writer)
             {
                 base.Save(writer);
+                LEB128.WriteUInt32(writer, (uint)types.Length);
                 foreach (var entry in types)
                 {
                     LEB128.WriteUInt32(writer, entry);

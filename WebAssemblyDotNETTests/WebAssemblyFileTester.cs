@@ -46,8 +46,11 @@ namespace WebAssemblyDotNET.Tests
             // Check that streams are the same
             Assert.AreEqual(writeStream.Position, readStream.Position);
 
-            writeStream.Seek(0, SeekOrigin.Begin);
-            readStream.Seek(0, SeekOrigin.Begin);
+            // Todo: For large files, should do buffered comparisons rather than using .ToArray()
+            // ToArray doesn't require us to seek back to 0
+
+            //writeStream.Seek(0, SeekOrigin.Begin);
+            //readStream.Seek(0, SeekOrigin.Begin);
 
             Assert.IsTrue(writeStream.ToArray().SequenceEqual(readStream.ToArray()));
 

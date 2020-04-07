@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
 using NLog;
-
 namespace WebAssemblyCS
 {
     class Options
