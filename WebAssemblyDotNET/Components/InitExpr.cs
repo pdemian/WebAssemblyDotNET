@@ -30,12 +30,17 @@ namespace WebAssemblyDotNET
                 expr = code.ToArray();
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 writer.Write(expr);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                writer.Write($"(i32.const {WebAssemblyHelper.GetOffset(this)})");
+            }
+
+            internal override uint BinarySize()
             {
                 return (uint)expr.Length;
             }

@@ -13,11 +13,11 @@ namespace WebAssemblyDotNET
         {
             public readonly FunctionBody[] bodies;
 
-            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling BinarySize()")]
             public CodeSection(FunctionBody[] bodies) : base(WebAssemblyModuleID.Code)
             {
                 this.bodies = bodies ?? throw new ArgumentException(nameof(bodies));
-                payload_len = SizeOf() - base.SizeOf();
+                payload_len = BinarySize() - base.BinarySize();
             }
 
             public CodeSection(BinaryReader reader) : base(reader)
@@ -32,19 +32,24 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                base.Save(writer);
+                base.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, (uint)bodies.Length);
                 foreach (var entry in bodies)
                 {
-                    entry.Save(writer);
+                    entry.SaveAsWASM(writer);
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return base.SizeOf() + (uint)bodies.Select(x => (long)x.SizeOf()).Sum() + LEB128.SizeOf((uint)bodies.Length);
+                throw new NotImplementedException();
+            }
+
+            internal override uint BinarySize()
+            {
+                return base.BinarySize() + (uint)bodies.Select(x => (long)x.BinarySize()).Sum() + LEB128.SizeOf((uint)bodies.Length);
             }
 
             public override string ToString()

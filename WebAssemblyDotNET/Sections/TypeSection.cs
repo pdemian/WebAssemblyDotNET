@@ -13,11 +13,11 @@ namespace WebAssemblyDotNET
         {
             public readonly FuncType[] entries;
 
-            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling BinarySize()")]
             public TypeSection(FuncType[] entries) : base(WebAssemblyModuleID.Type)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
-                payload_len = SizeOf() - base.SizeOf();
+                payload_len = BinarySize() - base.BinarySize();
             }
 
             public TypeSection(BinaryReader reader) : base(reader)
@@ -32,19 +32,29 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                base.Save(writer);
+                base.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, (uint)entries.Length);
                 foreach (FuncType entry in entries)
                 {
-                    entry.Save(writer);
+                    entry.SaveAsWASM(writer);
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return base.SizeOf() + LEB128.SizeOf((uint)entries.Length) + (uint)entries.Select(x => (long)x.SizeOf()).Sum();
+                for (uint index = 0; index < entries.Length; index++)
+                {
+                    writer.Write($"\t(type {index} ");
+                    entries[index].SaveAsWAT(writer);
+                    writer.Write(")\n");
+                }
+            }
+
+            internal override uint BinarySize()
+            {
+                return base.BinarySize() + LEB128.SizeOf((uint)entries.Length) + (uint)entries.Select(x => (long)x.BinarySize()).Sum();
             }
 
             public override string ToString()

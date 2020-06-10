@@ -45,32 +45,39 @@ namespace WebAssemblyDotNET
                 if (code[code.Length - 1] != (byte)WebAssemblyOpcode.END) throw new Exception($"File is invalid. Expected byte {WebAssemblyOpcode.END}, received {code[code.Length-1]}.");
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                throw new NotImplementedException();
+            }
+
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 uint local_count = (uint)locals.Length;
-                uint body_size = LEB128.SizeOf(local_count) + (uint)locals.Select(x => (long)x.SizeOf()).Sum() + (uint)code.Length;
+                uint body_size = LEB128.SizeOf(local_count) + (uint)locals.Select(x => (long)x.BinarySize()).Sum() + (uint)code.Length;
 
                 LEB128.WriteUInt32(writer, body_size);
                 LEB128.WriteUInt32(writer, local_count);
                 foreach (var local in locals)
                 {
-                    local.Save(writer);
+                    local.SaveAsWASM(writer);
                 }
                 writer.Write(code);
             }
 
-            public override uint SizeOf()
+            internal override uint BinarySize()
             {
                 uint local_count = (uint)locals.Length;
-                long body_size = LEB128.SizeOf(local_count) + (uint)locals.Select(x => (long)x.SizeOf()).Sum() + code.Length;
+                long body_size = LEB128.SizeOf(local_count) + (uint)locals.Select(x => (long)x.BinarySize()).Sum() + code.Length;
 
-                return LEB128.SizeOf((uint)body_size) + LEB128.SizeOf(local_count) + (uint)locals.Select(x => (long)x.SizeOf()).Sum() + (uint)code.Length;
+                return LEB128.SizeOf((uint)body_size) + LEB128.SizeOf(local_count) + (uint)locals.Select(x => (long)x.BinarySize()).Sum() + (uint)code.Length;
             }
 
             public override string ToString()
             {
                 return $"({GetType().Name} (locals {WebAssemblyHelper.ToString(locals)}) (code {BitConverter.ToString(code).Replace("-", "")}))";
             }
+
+
         }
     }
 }

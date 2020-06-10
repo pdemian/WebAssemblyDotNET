@@ -63,7 +63,7 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 var module = Encoding.UTF8.GetBytes(module_str);
                 var field = Encoding.UTF8.GetBytes(field_str);
@@ -80,18 +80,45 @@ namespace WebAssemblyDotNET
                         LEB128.WriteUInt32(writer, (uint)type);
                         break;
                     case WebAssemblyExternalKind.Table:
-                        ((TableType)type).Save(writer);
+                        ((TableType)type).SaveAsWASM(writer);
                         break;
                     case WebAssemblyExternalKind.Memory:
-                        ((MemoryType)type).Save(writer);
+                        ((MemoryType)type).SaveAsWASM(writer);
                         break;
                     case WebAssemblyExternalKind.Global:
-                        ((GlobalType)type).Save(writer);
+                        ((GlobalType)type).SaveAsWASM(writer);
                         break;
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                writer.Write("(import \"");
+                writer.Write(WebAssemblyHelper.EscapeString(module_str));
+                writer.Write("\" \"");
+                writer.Write(WebAssemblyHelper.EscapeString(field_str));
+                writer.Write("\" (");
+
+                switch(kind)
+                {
+                    case WebAssemblyExternalKind.Function:
+                        writer.Write((uint)type);
+                        break;
+                    case WebAssemblyExternalKind.Table:
+                        ((TableType)type).SaveAsWAT(writer);
+                        break;
+                    case WebAssemblyExternalKind.Memory:
+                        ((MemoryType)type).SaveAsWAT(writer);
+                        break;
+                    case WebAssemblyExternalKind.Global:
+                        ((GlobalType)type).SaveAsWAT(writer);
+                        break;
+                }
+
+                writer.Write(')');
+            }
+
+            internal override uint BinarySize()
             {
                 var module_len = Encoding.UTF8.GetByteCount(module_str);
                 var field_len = Encoding.UTF8.GetByteCount(field_str);
@@ -104,13 +131,13 @@ namespace WebAssemblyDotNET
                         size += LEB128.SizeOf((uint)type);
                         break;
                     case WebAssemblyExternalKind.Table:
-                        size += ((TableType)type).SizeOf();
+                        size += ((TableType)type).BinarySize();
                         break;
                     case WebAssemblyExternalKind.Memory:
-                        size += ((MemoryType)type).SizeOf();
+                        size += ((MemoryType)type).BinarySize();
                         break;
                     case WebAssemblyExternalKind.Global:
-                        size += ((GlobalType)type).SizeOf();
+                        size += ((GlobalType)type).BinarySize();
                         break;
                 }
 
@@ -121,6 +148,7 @@ namespace WebAssemblyDotNET
             {
                 return $"({GetType().Name} (module {module_str}) (field {field_str}) (kind {kind}) (type {type}))";
             }
+
         }
     }
 }

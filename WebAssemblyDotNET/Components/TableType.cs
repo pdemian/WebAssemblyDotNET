@@ -26,15 +26,20 @@ namespace WebAssemblyDotNET
                 limits = new ResizeLimit(reader);
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 LEB128.WriteInt7(writer, (sbyte)element_type);
-                limits.Save(writer);
+                limits.SaveAsWASM(writer);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return sizeof(sbyte) + limits.SizeOf();
+                writer.Write(element_type.ToString());
+            }
+
+            internal override uint BinarySize()
+            {
+                return sizeof(sbyte) + limits.BinarySize();
             }
 
             public override string ToString()

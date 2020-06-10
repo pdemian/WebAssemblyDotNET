@@ -235,8 +235,9 @@ namespace WebAssemblyDotNET
             logger = LogManager.GetLogger(GetType().Name);
         }
 
-        public abstract void Save(BinaryWriter writer);
-        public abstract uint SizeOf();
+        internal abstract void SaveAsWASM(BinaryWriter writer);
+        internal abstract void SaveAsWAT(BinaryWriter writer);
+        internal abstract uint BinarySize();
         public abstract override string ToString();
     }
 
@@ -268,13 +269,13 @@ namespace WebAssemblyDotNET
             data_size = payload_len;
         }
 
-        public override void Save(BinaryWriter writer)
+        internal override void SaveAsWASM(BinaryWriter writer)
         {
             LEB128.WriteUInt7(writer, (byte)module);
             LEB128.WriteUInt32(writer, payload_len);
         }
 
-        public override uint SizeOf()
+        internal override uint BinarySize()
         {
             return sizeof(byte) + LEB128.SizeOf(payload_len);
         }

@@ -29,11 +29,11 @@ namespace WebAssemblyDotNET.Tests
             WebAssemblyFile file = new WebAssemblyFile();
 
             // Read and save file
-            file.Parse(filename, false);
-            file.Save(new BinaryWriter(writeStream));
+            file.ParseAsWASM(filename, false);
+            file.SaveAsWASM(writeStream);
 
-            // Assert that SizeOf is in fact correct. No need to test individual sizeofs as writeStream is summed anyways
-            Assert.AreEqual<long>(writeStream.Position, file.SizeOf());
+            // Assert that BinarySize is in fact correct. No need to test individual sizeofs as writeStream is summed anyways
+            Assert.AreEqual<long>(writeStream.Position, file.BinarySize());
 
             using (FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read))
             {

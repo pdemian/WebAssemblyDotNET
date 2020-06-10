@@ -27,15 +27,22 @@ namespace WebAssemblyDotNET
                 if (type.content_type != WebAssemblyHelper.GetInitExprType(init)) throw new Exception("Global variable type and expression mismatch.");
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                type.Save(writer);
-                init.Save(writer);
+                type.SaveAsWASM(writer);
+                init.SaveAsWASM(writer);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return type.SizeOf() + init.SizeOf();
+                type.SaveAsWAT(writer);
+                writer.Write(' ');
+                type.SaveAsWAT(writer);
+            }
+
+            internal override uint BinarySize()
+            {
+                return type.BinarySize() + init.BinarySize();
             }
 
             public override string ToString()

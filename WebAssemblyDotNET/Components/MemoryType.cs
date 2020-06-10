@@ -20,14 +20,19 @@ namespace WebAssemblyDotNET
                 limits = new ResizeLimit(reader);
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                limits.Save(writer);
+                limits.SaveAsWASM(writer);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return limits.SizeOf();
+                limits.SaveAsWAT(writer);
+            }
+
+            internal override uint BinarySize()
+            {
+                return limits.BinarySize();
             }
 
             public override string ToString()

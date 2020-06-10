@@ -13,11 +13,11 @@ namespace WebAssemblyDotNET
         {
             public readonly GlobalVariable[] globals;
 
-            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling BinarySize()")]
             public GlobalSection(GlobalVariable[] globals) : base(WebAssemblyModuleID.Global)
             {
                 this.globals = globals ?? throw new ArgumentException(nameof(globals));
-                payload_len = SizeOf() - base.SizeOf();
+                payload_len = BinarySize() - base.BinarySize();
             }
 
             public GlobalSection(BinaryReader reader) : base(reader)
@@ -32,19 +32,29 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                base.Save(writer);
+                base.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, (uint)globals.Length);
                 foreach (var entry in globals)
                 {
-                    entry.Save(writer);
+                    entry.SaveAsWASM(writer);
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return base.SizeOf() + (uint)globals.Select(x => (long)x.SizeOf()).Sum() + LEB128.SizeOf((uint)globals.Length);
+                for (uint index = 0; index < globals.Length; index++)
+                {
+                    writer.Write($"\t(global {index} ");
+                    globals[index].SaveAsWAT(writer);
+                    writer.Write(")\n");
+                }
+            }
+
+            internal override uint BinarySize()
+            {
+                return base.BinarySize() + (uint)globals.Select(x => (long)x.BinarySize()).Sum() + LEB128.SizeOf((uint)globals.Length);
             }
 
             public override string ToString()

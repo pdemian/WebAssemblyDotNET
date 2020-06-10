@@ -47,7 +47,7 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 LEB128.WriteInt7(writer, (sbyte)WebAssemblyType.func);
                 LEB128.WriteUInt32(writer, (uint)param_types.Length);
@@ -67,7 +67,24 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                writer.Write("(func ");
+
+                if(param_types.Length > 0)
+                {
+                    writer.Write($"(param {WebAssemblyHelper.ToString(param_types)}) ");
+                }
+
+                if(return_type != null)
+                {
+                    writer.Write($"(result {return_type.ToString()})");
+                }
+
+                writer.Write(')');
+            }
+
+            internal override uint BinarySize()
             {
                 return sizeof(byte) + LEB128.SizeOf((uint)param_types.Length) + (uint)param_types.Length + sizeof(byte) * (return_type == null ? 1u : 2u);
             }

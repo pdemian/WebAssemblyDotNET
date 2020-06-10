@@ -203,7 +203,7 @@ namespace WebAssemblyCS
             {
                 WebAssemblyFile file = new WebAssemblyFile();
 
-                file.Parse(options.Filenames[0], options.Strict);
+                file.ParseAsWASM(options.Filenames[0], options.Strict);
 
                 if (options.Run != null)
                 {

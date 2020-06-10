@@ -30,13 +30,18 @@ namespace WebAssemblyDotNET
                 type = (WebAssemblyType)tmp_type;
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 LEB128.WriteUInt32(writer, count);
                 writer.Write((byte)type);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                writer.Write($"(local {count} {type.ToString()})");
+            }
+
+            internal override uint BinarySize()
             {
                 return LEB128.SizeOf(count) + sizeof(byte);
             }

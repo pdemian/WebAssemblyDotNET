@@ -14,11 +14,11 @@ namespace WebAssemblyDotNET
         {
             public readonly ElementSegment[] entries;
 
-            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling BinarySize()")]
             public ElementSection(ElementSegment[] entries) : base(WebAssemblyModuleID.Element)
             {
                 this.entries = entries ?? throw new ArgumentException(nameof(entries));
-                payload_len = SizeOf() - base.SizeOf();
+                payload_len = BinarySize() - base.BinarySize();
             }
 
             public ElementSection(BinaryReader reader) : base(reader)
@@ -33,19 +33,29 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                base.Save(writer);
+                base.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, (uint)entries.Length);
                 foreach (var entry in entries)
                 {
-                    entry.Save(writer);
+                    entry.SaveAsWASM(writer);
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return base.SizeOf() + (uint)entries.Select(x => (long)x.SizeOf()).Sum() + LEB128.SizeOf((uint)entries.Length);
+                foreach (var entry in entries)
+                {
+                    writer.Write('\t');
+                    entry.SaveAsWAT(writer);
+                    writer.Write('\n');
+                }
+            }
+
+            internal override uint BinarySize()
+            {
+                return base.BinarySize() + (uint)entries.Select(x => (long)x.BinarySize()).Sum() + LEB128.SizeOf((uint)entries.Length);
             }
 
 

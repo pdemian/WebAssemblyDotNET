@@ -32,13 +32,24 @@ namespace WebAssemblyDotNET
                 mutability = mut != 0;
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 LEB128.WriteUInt7(writer, (byte)content_type);
                 LEB128.WriteUInt7(writer, (byte)(mutability ? 1 : 0));
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                writer.Write('(');
+                if(mutability)
+                {
+                    writer.Write("mut ");
+                }
+                writer.Write(content_type.ToString());
+                writer.Write(')');
+            }
+
+            internal override uint BinarySize()
             {
                 return sizeof(byte) + sizeof(byte);
             }

@@ -20,15 +20,20 @@ namespace WebAssemblyDotNET
                 index = LEB128.ReadUInt32(reader);
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                base.Save(writer);
+                base.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, index);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return base.SizeOf() + LEB128.SizeOf(index);
+                writer.Write($"\t(start {index})\n");   
+            }
+
+            internal override uint BinarySize()
+            {
+                return base.BinarySize() + LEB128.SizeOf(index);
             }
 
             public override string ToString()

@@ -12,11 +12,11 @@ namespace WebAssemblyDotNET
         {
             public readonly uint[] types;
 
-            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling SizeOf()")]
+            [SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors", Justification = "Cleaner code by calling BinarySize()")]
             public FunctionSection(uint[] types) : base(WebAssemblyModuleID.Function)
             {
                 this.types = types ?? throw new ArgumentException(nameof(types));
-                payload_len = SizeOf() - base.SizeOf();
+                payload_len = BinarySize() - base.BinarySize();
             }
 
             public FunctionSection(BinaryReader reader) : base(reader)
@@ -31,9 +31,9 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                base.Save(writer);
+                base.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, (uint)types.Length);
                 foreach (var entry in types)
                 {
@@ -41,9 +41,14 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return base.SizeOf() + (uint)types.Select(x => (long)LEB128.SizeOf(x)).Sum() + LEB128.SizeOf((uint)types.Length);
+                throw new NotImplementedException();
+            }
+
+            internal override uint BinarySize()
+            {
+                return base.BinarySize() + (uint)types.Select(x => (long)LEB128.SizeOf(x)).Sum() + LEB128.SizeOf((uint)types.Length);
             }
 
             public override string ToString()

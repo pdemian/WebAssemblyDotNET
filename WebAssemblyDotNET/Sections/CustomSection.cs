@@ -34,9 +34,9 @@ namespace WebAssemblyDotNET
                 payload_len = LEB128.SizeOf(name_bytes) + name_bytes + (uint)payload_data.Length;
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
-                base.Save(writer);
+                base.SaveAsWASM(writer);
 
                 byte[] name_bytes = Encoding.UTF8.GetBytes(name);
 
@@ -45,13 +45,17 @@ namespace WebAssemblyDotNET
                 writer.Write(payload_data);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                throw new NotImplementedException();
+            }
+
+            internal override uint BinarySize()
             {
                 int str_size = Encoding.UTF8.GetByteCount(name);
 
-                return base.SizeOf() + LEB128.SizeOf(str_size) + (uint)str_size + (uint)payload_data.Length;
+                return base.BinarySize() + LEB128.SizeOf(str_size) + (uint)str_size + (uint)payload_data.Length;
             }
-
 
             public override string ToString()
             {

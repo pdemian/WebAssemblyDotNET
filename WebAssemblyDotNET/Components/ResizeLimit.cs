@@ -32,7 +32,7 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 LEB128.WriteUInt7(writer, (byte)(maximum != null ? 1 : 0));
                 LEB128.WriteUInt32(writer, initial);
@@ -42,7 +42,17 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                writer.Write(initial);
+                if(maximum != null)
+                {
+                    writer.Write(' ');
+                    writer.Write((uint)maximum);
+                }
+            }
+
+            internal override uint BinarySize()
             {
                 return sizeof(byte) + LEB128.SizeOf(initial) + (maximum != null ? LEB128.SizeOf((uint)maximum) : 0);
             }

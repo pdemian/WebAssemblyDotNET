@@ -36,7 +36,7 @@ namespace WebAssemblyDotNET
                 index = LEB128.ReadUInt32(reader);
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 var field = Encoding.UTF8.GetBytes(field_str);
 
@@ -46,7 +46,31 @@ namespace WebAssemblyDotNET
                 LEB128.WriteUInt32(writer, index);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                writer.Write($"(export \"{WebAssemblyHelper.EscapeString(field_str)}\" (");
+
+                switch(kind)
+                {
+                    case WebAssemblyExternalKind.Function:
+                        writer.Write("func ");
+                        break;
+                    case WebAssemblyExternalKind.Memory:
+                        writer.Write("memory ");
+                        break;
+                    case WebAssemblyExternalKind.Table:
+                        writer.Write("table ");
+                        break;
+                    case WebAssemblyExternalKind.Global:
+                        writer.Write("global ");
+                        break;
+                }
+
+                writer.Write(index);
+                writer.Write("))");
+            }
+
+            internal override uint BinarySize()
             {
                 var field = Encoding.UTF8.GetByteCount(field_str);
 

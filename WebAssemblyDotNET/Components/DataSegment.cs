@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Text;
 
 namespace WebAssemblyDotNET
 {
@@ -28,17 +29,26 @@ namespace WebAssemblyDotNET
                 data = reader.ReadBytes((int)count);
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 LEB128.WriteUInt32(writer, memory_index);
-                offset.Save(writer);
+                offset.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, (uint)data.Length);
                 writer.Write(data);
             }
 
-            public override uint SizeOf()
+            internal override void SaveAsWAT(BinaryWriter writer)
             {
-                return LEB128.SizeOf(memory_index) + LEB128.SizeOf((uint)data.Length) + (uint)data.Length + offset.SizeOf();
+                writer.Write("(data ");
+                offset.SaveAsWAT(writer);
+                writer.Write(" \"");
+                writer.Write(WebAssemblyHelper.EscapeString(Encoding.UTF8.GetString(data)));
+                writer.Write("\")");
+            }
+
+            internal override uint BinarySize()
+            {
+                return LEB128.SizeOf(memory_index) + LEB128.SizeOf((uint)data.Length) + (uint)data.Length + offset.BinarySize();
             }
 
             public override string ToString()

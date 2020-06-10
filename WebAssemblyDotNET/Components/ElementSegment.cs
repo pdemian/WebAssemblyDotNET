@@ -34,10 +34,10 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override void Save(BinaryWriter writer)
+            internal override void SaveAsWASM(BinaryWriter writer)
             {
                 LEB128.WriteUInt32(writer, table_index);
-                offset.Save(writer);
+                offset.SaveAsWASM(writer);
                 LEB128.WriteUInt32(writer, (uint)function_index.Length);
                 foreach (var elem in function_index)
                 {
@@ -45,14 +45,19 @@ namespace WebAssemblyDotNET
                 }
             }
 
-            public override uint SizeOf()
+            internal override uint BinarySize()
             {
-                return LEB128.SizeOf(table_index) + offset.SizeOf() + (uint)function_index.Length + (uint)function_index.Select(x => (long)LEB128.SizeOf(x)).Sum();
+                return LEB128.SizeOf(table_index) + offset.BinarySize() + (uint)function_index.Length + (uint)function_index.Select(x => (long)LEB128.SizeOf(x)).Sum();
             }
 
             public override string ToString()
             {
                 return $"({GetType().Name} (table_index {table_index}) {offset} (function_index {WebAssemblyHelper.ToString(function_index)}))";
+            }
+
+            internal override void SaveAsWAT(BinaryWriter writer)
+            {
+                throw new NotImplementedException();
             }
         }
     }

@@ -5,13 +5,16 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using WebAssemblyDotNET.Sections;
+using NLog;
 
 namespace WebAssemblyDotNET
 {
     // https://webassembly.github.io/spec/core/binary/modules.html#binary-module
     public class WebAssemblyFile
     {
-        private const uint MAGIC = 0x6D736100;
+        private readonly Logger logger = LogManager.GetCurrentClassLogger();
+
+        private const uint MAGIC = 0x6D_73_61_00;
         private const uint SUPPORTED_VERSION = 1;
 
         public CustomSection custom = null;
@@ -29,8 +32,28 @@ namespace WebAssemblyDotNET
 
         public WebAssemblyFile() { }
 
-        // strict parse means all sections must come in order
         public void Parse(string filename, bool strict_parse = true)
+        {
+            switch(new FileInfo(filename).Extension.ToUpperInvariant())
+            {
+                case "TXT": //Maybe someone is using a .txt file to write the code in because .wat isn't exactly well known
+                case "WAT":
+                    ParseAsWAT(filename, strict_parse);
+                    break;
+                // default to WASM even if filename isn't specified as that's the primary purpose of this API
+                default:
+                    ParseAsWASM(filename, strict_parse);
+                    break;
+            }
+        }
+
+        public void ParseAsWAT(string filename, bool strict_parse = true)
+        {
+            throw new NotImplementedException();
+        }
+
+        // strict parse means all sections must come in order
+        public void ParseAsWASM(string filename, bool strict_parse = true)
         {
             if (!BitConverter.IsLittleEndian) throw new NotImplementedException("LEB128 implementation only handles little endian systems");
 
@@ -127,49 +150,98 @@ namespace WebAssemblyDotNET
             }
         }
 
-        public void Save(BinaryWriter writer)
+        public void SaveAsWAT(Stream stream)
         {
-            writer.Write(MAGIC);
-            writer.Write(SUPPORTED_VERSION);
+            BinaryWriter writer = new BinaryWriter(stream);
 
-            custom?.Save(writer);
-            type?.Save(writer);
-            import?.Save(writer);
-            function?.Save(writer);
-            table?.Save(writer);
-            memory?.Save(writer);
-            global?.Save(writer);
-            export?.Save(writer);
-            start?.Save(writer);
-            element?.Save(writer);
-            code?.Save(writer);
-            data?.Save(writer);
+            writer.Write("(module \n");
+
+            custom?.SaveAsWAT(writer);
+            type?.SaveAsWAT(writer);
+            import?.SaveAsWAT(writer);
+            function?.SaveAsWAT(writer);
+            table?.SaveAsWAT(writer);
+            memory?.SaveAsWAT(writer);
+            global?.SaveAsWAT(writer);
+            export?.SaveAsWAT(writer);
+            start?.SaveAsWAT(writer);
+            element?.SaveAsWAT(writer);
+            code?.SaveAsWAT(writer);
+            data?.SaveAsWAT(writer);
+
+            writer.Write(')');
         }
 
-        public void Save(string filename)
+        public void SaveAsWAT(string filename)
         {
             using (FileStream fs = new FileStream(filename, FileMode.Create, FileAccess.Write))
             {
-                Save(new BinaryWriter(fs));
+                SaveAsWAT(fs);
             }
         }
 
-        public uint SizeOf()
+        public void SaveAsWASM(Stream stream)
         {
-            return sizeof(uint) +
-                   sizeof(uint) +
-                   (custom?.SizeOf() ?? 0)   +
-                   (type?.SizeOf() ?? 0)     +
-                   (import?.SizeOf() ?? 0)   +
-                   (function?.SizeOf() ?? 0) +
-                   (table?.SizeOf() ?? 0)    +
-                   (memory?.SizeOf() ?? 0)   +
-                   (global?.SizeOf() ?? 0)   +
-                   (export?.SizeOf() ?? 0)   +
-                   (start?.SizeOf() ?? 0)    +
-                   (element?.SizeOf() ?? 0)  +
-                   (code?.SizeOf() ?? 0)     +
-                   (data?.SizeOf() ?? 0);
+            BinaryWriter writer = new BinaryWriter(stream);
+
+            writer.Write(MAGIC);
+            writer.Write(SUPPORTED_VERSION);
+
+            custom?.SaveAsWASM(writer);
+            type?.SaveAsWASM(writer);
+            import?.SaveAsWASM(writer);
+            function?.SaveAsWASM(writer);
+            table?.SaveAsWASM(writer);
+            memory?.SaveAsWASM(writer);
+            global?.SaveAsWASM(writer);
+            export?.SaveAsWASM(writer);
+            start?.SaveAsWASM(writer);
+            element?.SaveAsWASM(writer);
+            code?.SaveAsWASM(writer);
+            data?.SaveAsWASM(writer);
+        }
+
+        public void SaveAsWASM(string filename)
+        {
+            using (FileStream fs = new FileStream(filename, FileMode.Create, FileAccess.Write))
+            {
+                SaveAsWASM(fs);
+            }
+        }
+
+        public uint BinarySize()
+        {
+            logger.ConditionalTrace($"Custom Size: {0}", custom?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Type Size: {0}", type?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Import Size: {0}", import?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Function Size: {0}", function?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Table Size: {0}", table?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Memory Size: {0}", memory?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Global Size: {0}", global?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Export Size: {0}", export?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Start Size: {0}", start?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Element Size: {0}", element?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Code Size: {0}", code?.BinarySize() ?? 0);
+            logger.ConditionalTrace($"Data Size: {0}", data?.BinarySize() ?? 0);
+
+            uint size = sizeof(uint) +
+                        sizeof(uint) +
+                        (custom?.BinarySize() ?? 0)   +
+                        (type?.BinarySize() ?? 0)     +
+                        (import?.BinarySize() ?? 0)   +
+                        (function?.BinarySize() ?? 0) +
+                        (table?.BinarySize() ?? 0)    +
+                        (memory?.BinarySize() ?? 0)   +
+                        (global?.BinarySize() ?? 0)   +
+                        (export?.BinarySize() ?? 0)   +
+                        (start?.BinarySize() ?? 0)    +
+                        (element?.BinarySize() ?? 0)  +
+                        (code?.BinarySize() ?? 0)     +
+                        (data?.BinarySize() ?? 0);
+
+            logger.Debug($"Binary Size = {0}", size);
+
+            return size;
         }
 
         public override string ToString()
